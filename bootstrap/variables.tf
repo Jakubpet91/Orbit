@@ -11,10 +11,10 @@ variable "location" {
   default     = "West Europe"
 }
 
-variable "storage_account_name" {
-  description = "Name of the storage account for tfstate."
+variable "storage_account_prefix" {
+  description = "Prefix for the storage account name."
   type        = string
-  default     = "tfstate${random_string.suffix.result}"
+  default     = "tfstate"
 }
 
 variable "storage_container_name" {

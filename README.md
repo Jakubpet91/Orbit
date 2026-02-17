@@ -119,40 +119,4 @@ Once you have configured the secrets and push a commit to the `main` branch, the
 
 ### 6. Azure Cloud Infrastructure diagram
 
-```mermaid
-graph TD
-    User((User / Internet))
-    
-    subgraph Azure["Azure Cloud (Region: West Europe)"]
-        style Azure fill:#e6f7ff,stroke:#005b96
-        
-        subgraph RG["Resource Group: orbit-dev-rg"]
-            style RG fill:#ffffff,stroke:#333,stroke-dasharray: 5 5
-
-            subgraph VNet["VNet: orbit-dev-vnet (10.0.0.0/16)"]
-                style VNet fill:#f0f0f0,stroke:#666
-
-                subgraph BackendSubnet["Backend Subnet (10.0.1.0/24)"]
-                    style BackendSubnet fill:#d9ead3,stroke:#6aa84f
-                    AKS["AKS Cluster<br/>(Nodes: Standard_B2s)"]
-                end
-
-                subgraph DBSubnet["DB Subnet (10.0.2.0/24)"]
-                    style DBSubnet fill:#fff2cc,stroke:#d6b656
-                    Postgres["PostgreSQL Flexible Server"]
-                    NSG["NSG Rules:<br/>1. Allow 5432 from Backend<br/>2. Deny All VNet Inbound"]
-                end
-                
-                DNS["Private DNS Zone<br/>(privatelink.postgres...)"]
-            end
-        end
-    end
-
-    %% Traffic Flow
-    User -->|HTTPS / 443| AKS
-    AKS -->|TCP / 5432| Postgres
-    
-    %% Associations
-    NSG -.->|Protects| Postgres
-    DNS -.->|Resolution Link| VNet
-```
+See the detailed **Infrastructure** and **Deployment Pipeline** diagrams in [diagram.md](diagram.md).

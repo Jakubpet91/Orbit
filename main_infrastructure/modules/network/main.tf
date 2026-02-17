@@ -50,7 +50,6 @@ resource "azurerm_network_security_group" "db_nsg" {
   tags                = var.tags
 }
 
-# Allow TCP 5432 from backend-subnet to db-subnet
 resource "azurerm_network_security_rule" "allow_postgres" {
   name                        = "Allow-Postgres-From-Backend"
   priority                    = 100
@@ -60,6 +59,20 @@ resource "azurerm_network_security_rule" "allow_postgres" {
   source_port_range           = "*"
   destination_port_range      = "5432"
   source_address_prefix       = var.backend_subnet_address_prefix
+  destination_address_prefix  = "*"
+  resource_group_name         = var.resource_group_name
+  network_security_group_name = azurerm_network_security_group.db_nsg.name
+}
+
+resource "azurerm_network_security_rule" "deny_vnet_inbound" {
+  name                        = "Deny-Vnet-Inbound"
+  priority                    = 200
+  direction                   = "Inbound"
+  access                      = "Deny"
+  protocol                    = "*"
+  source_port_range           = "*"
+  destination_port_range      = "*"
+  source_address_prefix       = "VirtualNetwork"
   destination_address_prefix  = "*"
   resource_group_name         = var.resource_group_name
   network_security_group_name = azurerm_network_security_group.db_nsg.name

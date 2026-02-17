@@ -68,14 +68,22 @@ After the apply is complete, Terraform will output the names of the created reso
 
 ### 4. Configure GitHub Secrets
 
-The CI/CD pipeline requires several secrets to be configured in your GitHub repository settings. Go to `Settings` > `Secrets and variables` > `Actions` and create the following secrets:
+First, create a Service Principal for Terraform to authenticate with Azure. Run this command (replace `<subscription-id>` with your actual Subscription ID):
+
+```bash
+az ad sp create-for-rbac --name "orbit-cicd" --role Contributor --scopes /subscriptions/<subscription-id>
+```
+
+The command will output a JSON object containing the credentials.
+
+Next, go to your GitHub repository, navigate to `Settings` > `Secrets and variables` > `Actions`, and create the following secrets:
 
 **Azure Service Principal Credentials:**
 
-*   `ARM_CLIENT_ID`: The Client ID of your Azure Service Principal.
-*   `ARM_CLIENT_SECRET`: The Client Secret of your Azure Service Principal.
+*   `ARM_CLIENT_ID`: The `appId` value from the JSON output.
+*   `ARM_CLIENT_SECRET`: The `password` value from the JSON output.
 *   `ARM_SUBSCRIPTION_ID`: Your Azure Subscription ID.
-*   `ARM_TENANT_ID`: Your Azure Tenant ID.
+*   `ARM_TENANT_ID`: The `tenant` value from the JSON output.
 
 **Terraform State Backend Details (from bootstrap output):**
 
@@ -95,6 +103,7 @@ The GitHub Actions pipeline is defined in `.github/workflows/terraform.yml` and 
 **Trigger:**
 
 *   The pipeline runs on every `push` or `pull_request` to the `main` branch.
+*   It can also be triggered manually (`workflow_dispatch`) to destroy the infrastructure.
 
 **Workflow:**
 
@@ -102,7 +111,47 @@ The GitHub Actions pipeline is defined in `.github/workflows/terraform.yml` and 
 2.  **Setup Terraform:** The specified version of Terraform is installed.
 3.  **Terraform Init:** The working directory is initialized. It configures the `azurerm` backend using the `TFSTATE_*` secrets.
 4.  **Terraform Validate:** Checks if the configuration is syntactically valid.
-5.  **Terraform Plan (on Pull Request):** If the workflow was triggered by a pull request, a plan is generated to show the changes that would be made. This helps in reviewing the proposed changes.
+5.  **Terraform Plan:** Generates an execution plan showing pending changes.
 6.  **Terraform Apply (on Push to `main`):** If the workflow was triggered by a push to the `main` branch, the changes are automatically applied to the Azure environment.
+7.  **Terraform Destroy (Manual Trigger):** If triggered manually with the `destroy_only` option set to `true`, the infrastructure is destroyed.
 
 Once you have configured the secrets and push a commit to the `main` branch, the pipeline will run and deploy your infrastructure.
+
+### 6. Azure Cloud Infrastructure diagram
+
+graph TD
+    User((User / Internet))
+    
+    subgraph Azure["Azure Cloud (Region: West Europe)"]
+        style Azure fill:#e6f7ff,stroke:#005b96
+        
+        subgraph RG["Resource Group: orbit-dev-rg"]
+            style RG fill:#ffffff,stroke:#333,stroke-dasharray: 5 5
+
+            subgraph VNet["VNet: orbit-dev-vnet (10.0.0.0/16)"]
+                style VNet fill:#f0f0f0,stroke:#666
+
+                subgraph BackendSubnet["Backend Subnet (10.0.1.0/24)"]
+                    style BackendSubnet fill:#d9ead3,stroke:#6aa84f
+                    AKS["AKS Cluster<br/>(Nodes: Standard_B2s)"]
+                end
+
+                subgraph DBSubnet["DB Subnet (10.0.2.0/24)"]
+                    style DBSubnet fill:#fff2cc,stroke:#d6b656
+                    Postgres["PostgreSQL Flexible Server"]
+                    NSG["NSG Rules:<br/>1. Allow 5432 from Backend<br/>2. Deny All VNet Inbound"]
+                end
+                
+                DNS["Private DNS Zone<br/>(privatelink.postgres...)"]
+            end
+        end
+    end
+
+    %% Traffic Flow
+    User -->|HTTPS / 443| AKS
+    AKS -->|TCP / 5432| Postgres
+    
+    %% Associations
+    NSG -.->|Protects| Postgres
+    DNS -.->|Resolution Link| VNet
+

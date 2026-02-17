@@ -119,6 +119,7 @@ Once you have configured the secrets and push a commit to the `main` branch, the
 
 ### 6. Azure Cloud Infrastructure diagram
 
+```mermaid
 graph TD
     User((User / Internet))
     
@@ -154,4 +155,4 @@ graph TD
     %% Associations
     NSG -.->|Protects| Postgres
     DNS -.->|Resolution Link| VNet
-
+```

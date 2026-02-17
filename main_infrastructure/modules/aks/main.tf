@@ -20,6 +20,5 @@ resource "azurerm_kubernetes_cluster" "aks" {
     network_plugin     = "azure"
     service_cidr       = "10.2.0.0/24"
     dns_service_ip     = "10.2.0.10"
-    docker_bridge_cidr = "172.17.0.1/16"
   }
 }

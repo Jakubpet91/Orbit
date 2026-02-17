@@ -2,6 +2,7 @@ resource "azurerm_postgresql_flexible_server" "db" {
   name                   = var.db_server_name
   resource_group_name    = var.resource_group_name
   location               = var.location
+  public_network_access_enabled = false
   version                = "13"
   delegated_subnet_id    = var.delegated_subnet_id
   private_dns_zone_id    = var.private_dns_zone_id

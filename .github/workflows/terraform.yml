@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       action:
-        description: What to do? (apply / destroy)'
+        description: 'Action to perform (apply / destroy)'
         required: true
         default: 'apply'
         type: choice

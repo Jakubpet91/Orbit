@@ -13,11 +13,13 @@ on:
       - main
     paths:
       - 'main_infrastructure/**'
+      - '.github/workflows/terraform.yml'
   pull_request:
     branches:
       - main
     paths:
       - 'main_infrastructure/**'
+      - '.github/workflows/terraform.yml'
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}

@@ -1,9 +1,11 @@
 name: 'Terraform CI/CD'
 
 on:
+  workflow_dispatch: {}
   push:
     branches:
       - main
+      - 'feature/**'
     paths:
       - 'main_infrastructure/**'
       - '.github/workflows/terraform.yml'
@@ -30,7 +32,6 @@ jobs:
         with:
           terraform_version: 1.1.7
 
-      # Initialize a new or existing Terraform working directory by creating initial files, loading any remote state, and downloading modules.
       - name: Terraform Init
         id: init
         env:
@@ -40,12 +41,10 @@ jobs:
           ARM_TENANT_ID: ${{ secrets.ARM_TENANT_ID }}
         run: terraform init -backend-config="resource_group_name=${{ secrets.TFSTATE_RG }}" -backend-config="storage_account_name=${{ secrets.TFSTATE_SA }}" -backend-config="container_name=${{ secrets.TFSTATE_CONTAINER }}" -backend-config="key=dev.tfstate"
 
-      # Checks that a Terraform configuration is valid
       - name: Terraform Validate
         id: validate
         run: terraform validate
 
-      # Generates a speculative execution plan, showing what actions Terraform would take to apply the current configuration.
       - name: Terraform Plan
         id: plan
         env:
@@ -54,11 +53,10 @@ jobs:
           ARM_SUBSCRIPTION_ID: ${{ secrets.ARM_SUBSCRIPTION_ID }}
           ARM_TENANT_ID: ${{ secrets.ARM_TENANT_ID }}
         run: terraform plan -var="db_administrator_login=${{ secrets.DB_ADMIN_LOGIN }}" -var="db_administrator_password=${{ secrets.DB_ADMIN_PASSWORD }}" -out=tfplan -input=false
-        if: github.event_name == 'pull_request'
 
-      # Apply the changes required to reach the desired state of the configuration.
       - name: Terraform Apply
-        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+        # UPRAVENÁ PODMÍNKA: Pustí se na main i na feature větvích při pushi
+        if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/heads/feature/'))
         env:
           ARM_CLIENT_ID: ${{ secrets.ARM_CLIENT_ID }}
           ARM_CLIENT_SECRET: ${{ secrets.ARM_CLIENT_SECRET }}

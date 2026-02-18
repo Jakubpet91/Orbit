@@ -2,146 +2,123 @@
 This diagram illustrates the Azure network topology, including the Bootstrap layer for state management and the Main Infrastructure.
 
 ```mermaid
-flowchart TB
-    %% Define Styles
-    classDef user fill:#000,stroke:#000,color:#fff
-    classDef compute fill:#0078D4,stroke:#005A9E,color:#fff
-    classDef db fill:#68217A,stroke:#3E1F63,color:#fff
-    classDef storage fill:#0072C6,stroke:#004D85,color:#fff
-    classDef security fill:#D13438,stroke:#A4262C,color:#fff
-    classDef net fill:#E1F0FA,stroke:#0078D4,stroke-dasharray: 5 5
-    classDef plain fill:#fff,stroke:#999,stroke-dasharray: 5 5
-
-    UserNode((👤 User / Internet)):::user
+flowchart TD
+    %% --- DEFINICE STYLŮ ---
+    %% Tmavé nody (zdroje) -> Bílý text
+    classDef user fill:#000000,stroke:#333,stroke-width:2px,color:#fff
+    classDef k8s fill:#326CE5,stroke:#326CE5,stroke-width:2px,color:#fff
+    classDef db fill:#336791,stroke:#336791,stroke-width:2px,color:#fff
+    classDef storage fill:#289028,stroke:#289028,stroke-width:2px,color:#fff
     
-    subgraph AzureCloud["☁️ Azure Cloud (West Europe)"]
-        style AzureCloud fill:#F3F2F1,stroke:#0078D4
-        
-        subgraph Bootstrap["🏗️ Bootstrap Infrastructure (State Management)"]
-            style Bootstrap fill:#fff,stroke:#666,stroke-dasharray: 5 5
-            TFStateSA[("📦 Storage Account<br/>(Terraform State)")]:::storage
+    %% Světlé nody (pravidla, poznámky) -> Černý text
+    classDef security fill:#FFF4F4,stroke:#D13438,stroke-width:1px,color:#D13438,stroke-dasharray: 3 3
+
+    %% --- UŽIVATEL ---
+    User((👤 User / Internet)):::user
+
+    %% --- AZURE CLOUD ---
+    subgraph Azure["☁️ Azure Cloud (West Europe)"]
+        style Azure fill:#F5F5F5,stroke:#999,stroke-width:1px,color:#000000
+
+        %% --- BOOTSTRAP VRSTVA ---
+        subgraph Bootstrap["🏗️ Bootstrap (State Mgmt)"]
+            style Bootstrap fill:#ffffff,stroke:#666,stroke-dasharray: 5 5,color:#000000
+            TFState[("📦 Storage Account<br/>tfstate container")]:::storage
         end
 
-        subgraph MainInfra["🚀 Main Infrastructure (orbit-dev-rg)"]
-            style MainInfra fill:#fff,stroke:#666,stroke-dasharray: 5 5
+        %% --- HLAVNÍ INFRASTRUKTURA ---
+        subgraph MainInfra["🚀 Main Infrastructure (RG: orbit-dev)"]
+            style MainInfra fill:#ffffff,stroke:#333,color:#000000
 
-            subgraph VNet["🌐 VNet: orbit-dev-vnet (10.1.0.0/16)"]
-                style VNet fill:#fff,stroke:#0078D4
+            %% --- VNET ---
+            subgraph VNet["🌐 VNet: spoke1 (10.0.0.0/16)"]
+                style VNet fill:#EDF7FF,stroke:#0078D4,color:#000000
 
-                subgraph BackendSubnet["Backend Subnet (10.1.1.0/24)"]
-                    style BackendSubnet fill:#E1F0FA,stroke:#0078D4
-                    AKS["☸️ AKS Cluster<br/>(Nodes: Standard_B2s)"]:::compute
-                end
-
-                subgraph DBSubnet["DB Subnet (10.1.2.0/24)"]
-                    style DBSubnet fill:#E1F0FA,stroke:#0078D4
-                    Postgres[("🐘 PostgreSQL<br/>Flexible Server")]:::db
+                %% --- BACKEND SUBNET ---
+                subgraph SubnetAKS["Backend Subnet (10.0.1.0/24)"]
+                    style SubnetAKS fill:#ffffff,stroke:#0078D4,color:#000000
                     
-                    subgraph NSG["🛡️ Network Security Group"]
-                        style NSG fill:#FFF0F0,stroke:#D13438
-                        Rule1["✅ Allow: 5432 (From Backend)"]:::security
-                        Rule2["⛔ Deny: All VNet Inbound"]:::security
+                    subgraph AKS["☸️ AKS Cluster"]
+                        style AKS fill:#E8F0F9,stroke:#326CE5,color:#000000
+                        Ingress["🌐 Ingress Controller<br/>(Public IP / Frontend)"]:::k8s
+                        AppPod["⚙️ App Pods"]:::k8s
                     end
                 end
-                
-                DNS["📖 Private DNS Zone<br/>(privatelink.postgres...)"]:::plain
+
+                %% --- DB SUBNET ---
+                subgraph SubnetDB["DB Subnet (10.0.2.0/24)"]
+                    style SubnetDB fill:#ffffff,stroke:#0078D4,color:#000000
+                    
+                    Postgres[("🐘 PostgreSQL<br/>Flexible Server")]:::db
+                    
+                    subgraph NSG["🛡️ NSG Rules"]
+                        style NSG fill:#FFF4F4,stroke:#D13438,color:#000000
+                        Rule1["✅ Allow: 5432<br/>Source: Backend Subnet"]:::security
+                    end
+                end
             end
         end
     end
 
-    UserNode ==>|HTTPS / 443| AKS
-    AKS ==>|TCP / 5432| Postgres
-    NSG -.-o|Applied to| DBSubnet
-    DNS -.-o|Resolution Link| VNet
-    TFStateSA -.->|Stores State| MainInfra
+    %% --- PROPOJENÍ ---
+    User == HTTPS/443 ==> Ingress
+    Ingress -.->|Routing| AppPod
+    AppPod == TCP/5432 ==> Postgres
+    
+    %% Vazba NSG a State
+    NSG -.-o SubnetDB
+    TFState -.->|Stores State for| MainInfra
 ```
-
+    
 ```mermaid
 flowchart TD
-    %% Styles
-    classDef trigger fill:#F9A825,stroke:#C77900,color:#fff
-    classDef step fill:#2088FF,stroke:#005CC5,color:#fff
-    classDef tf fill:#7B42BC,stroke:#5A308C,color:#fff
-    classDef destroy fill:#D13438,stroke:#A4262C,color:#fff
+    %% --- STYLOVÁNÍ ---
+    %% Manuální kroky - Žlutá, černý text
+    classDef manual fill:#FFF9C4,stroke:#FBC02D,color:#000000
+    %% GitHub kroky - Tmavá, bílý text
+    classDef gh fill:#24292F,stroke:#000,color:#fff
+    %% Terraform akce - Fialová, bílý text
+    classDef terraform fill:#7B42BC,stroke:#5A308C,color:#fff
+    %% Azure zdroje - Modrá, bílý text
     classDef azure fill:#0078D4,stroke:#005A9E,color:#fff
-    classDef manual fill:#607D8B,stroke:#455A64,color:#fff
 
-    Dev[👤 Developer]
+    %% --- AKTÉŘI ---
+    Dev[👤 DevOps Engineer]
 
-    %% 1. Bootstrap Process
-    subgraph Bootstrap_Process ["🏗️ 1. Bootstrap (One-Time Manual Setup)"]
-        style Bootstrap_Process fill:#F3F2F1,stroke:#607D8B,stroke-dasharray: 5 5
-        
-        BootInit[("⚙️ TF Init")]:::tf
-        BootApply[("🚀 TF Apply")]:::tf
-        BootOutputs[("📄 Outputs<br/>(RG, SA Name)")]:::manual
-        
-        ConfigSecrets[("🔐 Configure GitHub Secrets")]:::manual
+    %% --- 1. FÁZE: BOOTSTRAP ---
+    subgraph Phase1["1️⃣ Fáze: Bootstrap (Local)"]
+        style Phase1 fill:#F5F5F5,stroke:#999,stroke-dasharray: 5 5,color:#000000
+        InitLocal["tf init & apply"]:::manual
+        CreateSA["Vytvoření Storage Account<br/>pro tfstate"]:::azure
+        GetCreds["Získání Azure Credentials<br/>(Service Principal)"]:::manual
     end
 
-    subgraph GitHub ["🐙 2. GitHub Actions Workflow (CI/CD)"]
-        style GitHub fill:#F6F8FA,stroke:#24292F
+    %% --- 2. FÁZE: GITHUB ACTIONS ---
+    subgraph Phase2["2️⃣ Fáze: GitHub Actions (CI/CD)"]
+        style Phase2 fill:#E1F0FA,stroke:#0078D4,color:#000000
         
-        %% Triggers
-        subgraph Triggers ["Triggers"]
-            style Triggers fill:#fff,stroke:#ccc,stroke-dasharray: 5 5
-            TriggerPR{{"🔀 Pull Request"}}:::trigger
-            TriggerPush{{"🚀 Push to Main"}}:::trigger
-            TriggerManual{{"⚠️ Manual Dispatch"}}:::trigger
-        end
-
-        %% Common Steps
-        Secrets[("🔐 Secrets Injection")]:::step
-        Init[("⚙️ Terraform Init")]:::tf
-        Validate[("✅ Terraform Validate")]:::tf
+        Secrets["🔐 GitHub Secrets<br/>(ARM_CLIENT_ID...)"]:::gh
         
-        %% Logic
-        Decision{{"❓ Event Condition"}}
-
-        %% Branches
-        subgraph PR_Flow ["PR Flow"]
-            style PR_Flow fill:#fff,stroke:#ccc,stroke-dasharray: 5 5
-            PlanOnly["📄 Plan"]:::tf
-        end
-
-        subgraph Main_Flow ["Main Branch Flow"]
-            style Main_Flow fill:#fff,stroke:#ccc,stroke-dasharray: 5 5
-            PlanApply["📄 Plan"]:::tf
-            Apply["🚀 Apply"]:::tf
-        end
-
-        subgraph Destroy_Flow ["Manual Destroy"]
-            style Destroy_Flow fill:#fff,stroke:#ccc,stroke-dasharray: 5 5
-            PlanDestroy["📄 Plan (-destroy)"]:::tf
-            Destroy["🔥 Destroy"]:::destroy
+        subgraph Pipeline["🔄 Terraform Workflow"]
+            style Pipeline fill:#ffffff,stroke:#ccc,color:#000000
+            TFInit["terraform init<br/>(backend=azurerm)"]:::terraform
+            TFPlan["terraform plan"]:::terraform
+            TFApply["terraform apply<br/>(auto-approve)"]:::terraform
         end
     end
 
-    AzSub[☁️ Azure Subscription]:::azure
+    %% --- CÍL ---
+    TargetEnv[("☁️ Azure Resources<br/>(AKS, VNet, DB)")]:::azure
 
-    %% Connections
-    Dev -->|Local CLI| BootInit
-    BootInit --> BootApply --> BootOutputs
-    BootOutputs --> ConfigSecrets
-    ConfigSecrets -.->|Available for| Secrets
+    %% --- TOK ---
+    Dev -->|1. Run once| InitLocal
+    InitLocal --> CreateSA
+    CreateSA -.->|State Storage| TFInit
+    
+    Dev -->|2. Configure| Secrets
+    Secrets -.-> Pipeline
 
-    Dev --> TriggerPR
-    Dev --> TriggerPush
-    Dev --> TriggerManual
-
-    TriggerPR --> Secrets
-    TriggerPush --> Secrets
-    TriggerManual --> Secrets
-
-    Secrets --> Init --> Validate --> Decision
-
-    Decision -- "Pull Request" --> PlanOnly
-    Decision -- "Push to Main" --> PlanApply --> Apply
-    Decision -- "Manual (Destroy=true)" --> PlanDestroy --> Destroy
-
-    %% Outputs
-    PlanOnly -.->|Review| Dev
-    Apply -->|Deploy| AzSub
-    Destroy -.->|Delete| AzSub
-    BootApply -->|Create State Storage| AzSub
+    Dev -->|3. Git Push| Pipeline
+    TFInit --> TFPlan --> TFApply
+    TFApply -->|Deploy| TargetEnv
 ```

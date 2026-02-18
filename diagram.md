@@ -1,4 +1,5 @@
 ## 1. Infrastructure Architecture
+
 This diagram illustrates the Azure network topology, including the Bootstrap layer for state management and the Main Infrastructure.
 
 ```mermaid
@@ -69,7 +70,7 @@ flowchart TD
     NSG -.-o SubnetDB
     TFState -.->|Stores State for| MainInfra
 ```
-    
+
 ```mermaid
 flowchart TD
     %% --- STYLOVÁNÍ ---

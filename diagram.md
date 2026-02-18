@@ -4,71 +4,53 @@ This diagram illustrates the Azure network topology, including the Bootstrap lay
 
 ```mermaid
 flowchart TD
-    %% --- DEFINICE STYLŮ ---
-    %% Tmavé nody (zdroje) -> Bílý text
-    classDef user fill:#000000,stroke:#333,stroke-width:2px,color:#fff
-    classDef k8s fill:#326CE5,stroke:#326CE5,stroke-width:2px,color:#fff
-    classDef db fill:#336791,stroke:#336791,stroke-width:2px,color:#fff
-    classDef storage fill:#289028,stroke:#289028,stroke-width:2px,color:#fff
-    
-    %% Světlé nody (pravidla, poznámky) -> Černý text
-    classDef security fill:#FFF4F4,stroke:#D13438,stroke-width:1px,color:#D13438,stroke-dasharray: 3 3
+    %% --- STYLY ---
+    classDef container fill:#fff,stroke:#333,color:#000
+    classDef azure fill:#E1F0FA,stroke:#0078D4,color:#000
+    classDef resource fill:#326CE5,stroke:#326CE5,color:#fff
+    classDef db fill:#336791,stroke:#336791,color:#fff
+    classDef storage fill:#289028,stroke:#289028,color:#fff
+    classDef warning fill:#FFF4F4,stroke:#D13438,stroke-dasharray: 5 5,color:#D13438
 
-    %% --- UŽIVATEL ---
-    User((👤 User / Internet)):::user
+    User((👤 User)):::container
 
-    %% --- AZURE CLOUD ---
-    subgraph Azure["☁️ Azure Cloud (West Europe)"]
-        style Azure fill:#F5F5F5,stroke:#999,stroke-width:1px,color:#000000
-
-        %% --- BOOTSTRAP VRSTVA ---
-        subgraph Bootstrap["🏗️ Bootstrap (State Mgmt)"]
-            style Bootstrap fill:#ffffff,stroke:#666,stroke-dasharray: 5 5,color:#000000
-            TFState[("📦 Storage Account<br/>tfstate container")]:::storage
+    %% --- CLOUD & INFRA ---
+    subgraph Cloud["☁️ Azure Cloud"]
+        direction TB
+        
+        %% Bootstrap
+        subgraph Bootstrap["🏗️ Bootstrap"]
+            TFState[("📦 TF State")]:::storage
         end
 
-        %% --- HLAVNÍ INFRASTRUKTURA ---
-        subgraph MainInfra["🚀 Main Infrastructure (RG: orbit-dev)"]
-            style MainInfra fill:#ffffff,stroke:#333,color:#000000
-
-            %% --- VNET ---
-            subgraph VNet["🌐 VNet: spoke1 (10.0.0.0/16)"]
-                style VNet fill:#EDF7FF,stroke:#0078D4,color:#000000
-
-                %% --- BACKEND SUBNET ---
-                subgraph SubnetAKS["Backend Subnet (10.0.1.0/24)"]
-                    style SubnetAKS fill:#ffffff,stroke:#0078D4,color:#000000
-                    
-                    subgraph AKS["☸️ AKS Cluster"]
-                        style AKS fill:#E8F0F9,stroke:#326CE5,color:#000000
-                        Ingress["🌐 Ingress Controller<br/>(Public IP / Frontend)"]:::k8s
-                        AppPod["⚙️ App Pods"]:::k8s
-                    end
+        %% Main Infra
+        subgraph MainInfra["🚀 Main Infrastructure"]
+            
+            subgraph VNet["🌐 VNet: spoke1"]
+                
+                subgraph BE_Sub["Backend Subnet"]
+                    Ingress["🌐 Ingress"]:::resource
+                    App["⚙️ AKS Pods"]:::resource
                 end
 
-                %% --- DB SUBNET ---
-                subgraph SubnetDB["DB Subnet (10.0.2.0/24)"]
-                    style SubnetDB fill:#ffffff,stroke:#0078D4,color:#000000
-                    
-                    Postgres[("🐘 PostgreSQL<br/>Flexible Server")]:::db
-                    
-                    subgraph NSG["🛡️ NSG Rules"]
-                        style NSG fill:#FFF4F4,stroke:#D13438,color:#000000
-                        Rule1["✅ Allow: 5432<br/>Source: Backend Subnet"]:::security
-                    end
+                subgraph DB_Sub["DB Subnet"]
+                    Postgres[("🐘 Postgres")]:::db
+                    NSG["🛡️ NSG: Allow 5432"]:::warning
                 end
             end
         end
     end
 
-    %% --- PROPOJENÍ ---
-    User == HTTPS/443 ==> Ingress
-    Ingress -.->|Routing| AppPod
-    AppPod == TCP/5432 ==> Postgres
-    
-    %% Vazba NSG a State
-    NSG -.-o SubnetDB
-    TFState -.->|Stores State for| MainInfra
+    %% --- VAZBY ---
+    User ==> Ingress
+    Ingress --> App
+    App ==> Postgres
+    NSG -.-o Postgres
+    TFState -.-> MainInfra
+
+    %% --- APLIKACE BAREV (Styling) ---
+    class Cloud,MainInfra,Bootstrap container
+    class VNet,BE_Sub,DB_Sub azure
 ```
 
 ```mermaid

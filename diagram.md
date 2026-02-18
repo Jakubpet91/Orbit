@@ -4,51 +4,58 @@ This diagram illustrates the Azure network topology, including the Bootstrap lay
 
 ```mermaid
 flowchart TD
-    %% --- STYLY ---
+    %% --- DEFINICE BAREV A STYLŮ ---
+    %% Kontejnery (Bílé/Světlé pozadí -> ČERNÝ TEXT)
     classDef container fill:#fff,stroke:#333,color:#000
     classDef azure fill:#E1F0FA,stroke:#0078D4,color:#000
+    
+    %% Zdroje (Tmavé pozadí -> BÍLÝ TEXT)
     classDef resource fill:#326CE5,stroke:#326CE5,color:#fff
     classDef db fill:#336791,stroke:#336791,color:#fff
     classDef storage fill:#289028,stroke:#289028,color:#fff
+    
+    %% Security (Světle červené pozadí -> ČERVENÝ TEXT)
     classDef warning fill:#FFF4F4,stroke:#D13438,stroke-dasharray: 5 5,color:#D13438
 
     User((👤 User)):::container
 
-    %% --- CLOUD & INFRA ---
+    %% --- INFRASTRUKTURA ---
     subgraph Cloud["☁️ Azure Cloud"]
         direction TB
         
         %% Bootstrap
-        subgraph Bootstrap["🏗️ Bootstrap"]
-            TFState[("📦 TF State")]:::storage
+        subgraph Bootstrap["🏗️ Bootstrap (State Mgmt)"]
+            TFState[("📦 Storage Account<br/>tfstate container")]:::storage
         end
 
-        %% Main Infra
+        %% Main Infrastructure
         subgraph MainInfra["🚀 Main Infrastructure"]
             
-            subgraph VNet["🌐 VNet: spoke1"]
+            subgraph VNet["🌐 VNet: spoke1<br/>"]
                 
-                subgraph BE_Sub["Backend Subnet"]
-                    Ingress["🌐 Ingress"]:::resource
-                    App["⚙️ AKS Pods"]:::resource
+                subgraph BE_Sub["Backend Subnet<br/>(10.0.1.0/24)"]
+                    Ingress["🌐 Ingress Controller<br/>(Public IP / Frontend)"]:::resource
+                    App["⚙️ App Pods"]:::resource
                 end
 
-                subgraph DB_Sub["DB Subnet"]
-                    Postgres[("🐘 Postgres")]:::db
-                    NSG["🛡️ NSG: Allow 5432"]:::warning
+                subgraph DB_Sub["DB Subnet<br/>(10.0.2.0/24)"]
+                    Postgres[("🐘 PostgreSQL<br/>Flexible Server")]:::db
+                    NSG["🛡️ NSG Rules<br/>✅ Allow: 5432<br/>Source: Backend Subnet"]:::warning
                 end
             end
         end
     end
 
-    %% --- VAZBY ---
+    %% --- PROPOJENÍ (S POPISKY) ---
     User ==> Ingress
-    Ingress --> App
-    App ==> Postgres
+    Ingress -->|Routing| App
+    App ==>|TCP/5432| Postgres
+    
+    %% Logické vazby
     NSG -.-o Postgres
-    TFState -.-> MainInfra
+    TFState -.->|Stores State for| MainInfra
 
-    %% --- APLIKACE BAREV (Styling) ---
+    %% --- APLIKACE STYLŮ ---
     class Cloud,MainInfra,Bootstrap container
     class VNet,BE_Sub,DB_Sub azure
 ```

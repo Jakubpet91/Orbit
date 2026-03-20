@@ -11,8 +11,7 @@ GEMINI_KEY = os.getenv("GEMINI_API_KEY")
 GITHUB_TOKEN = os.getenv("GITHUB_TOKEN")
 
 genai.configure(api_key=GEMINI_KEY)
-model = genai.GenerativeModel('gemini-1.5-flash')
-g = Github(GITHUB_TOKEN)
+model = genai.GenerativeModel('models/gemini-1.5-flash')g = Github(GITHUB_TOKEN)
 
 @app.post("/webhook")
 async def github_webhook(request: Request):

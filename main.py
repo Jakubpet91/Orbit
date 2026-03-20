@@ -10,6 +10,7 @@ app = FastAPI()
 GEMINI_KEY = os.getenv("GEMINI_API_KEY")
 GITHUB_TOKEN = os.getenv("GITHUB_TOKEN")
 
+# Každý z těchto tří musí být na vlastním řádku:
 genai.configure(api_key=GEMINI_KEY)
 model = genai.GenerativeModel('models/gemini-1.5-flash')
 g = Github(GITHUB_TOKEN)

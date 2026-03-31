@@ -12,21 +12,9 @@ GITHUB_TOKEN = os.getenv("GITHUB_TOKEN")
 
 genai.configure(api_key=GEMINI_KEY)
 
-# DYNAMICKÉ HLEDÁNÍ MODELU (Tohle vyřeší 404 navždy)
-def get_model_name():
-    try:
-        for m in genai.list_models():
-            if 'generateContent' in m.supported_generation_methods:
-                # Upřednostníme flash, pokud tam je, jinak vezmeme první funkční
-                if 'gemini-1.5-flash' in m.name:
-                    return m.name
-        return 'gemini-pro' # Záložní plán
-    except:
-        return 'gemini-1.5-flash' # Totální nouzovka
-
-MODEL_NAME = get_model_name()
-print(f"✅ Inicializován model: {MODEL_NAME}")
-model = genai.GenerativeModel(MODEL_NAME)
+model = genai.GenerativeModel(
+    model_name='gemini-1.5-flash',
+)
 g = Github(GITHUB_TOKEN)
 
 @app.get("/")

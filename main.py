@@ -6,14 +6,18 @@ from github import Github
 
 app = FastAPI()
 
-# KONFIGURACE
 GEMINI_KEY = os.getenv("GEMINI_API_KEY")
 GITHUB_TOKEN = os.getenv("GITHUB_TOKEN")
 
-genai.configure(api_key=GEMINI_KEY, transport='rest') 
+# Vynutíme verzi v1 a REST transport, aby to neskákalo do v1beta
+genai.configure(api_key=GEMINI_KEY, transport='rest')
 
-# Použijeme tento specifický název, který v1 API miluje
-model = genai.GenerativeModel('gemini-1.5-flash') 
+# Definujeme model s explicitním názvem pro v1
+model = genai.GenerativeModel('gemini-1.5-flash')
+
+# Tady je trik: Ručně přenastavíme klientskou verzi, pokud by to knihovna zkoušela obejít
+model._client.common_metadata.update([('x-goog-api-client', 'genai-py/0.7.2 gapic/v1')])
+
 g = Github(GITHUB_TOKEN)
 
 @app.get("/")

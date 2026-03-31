@@ -11,7 +11,7 @@ GEMINI_KEY = os.getenv("GEMINI_API_KEY")
 GITHUB_TOKEN = os.getenv("GITHUB_TOKEN")
 
 genai.configure(api_key=GEMINI_KEY)
-model = genai.GenerativeModel('models/gemini-1.5-flash')
+model = genai.GenerativeModel('gemini-1.5-flash-latest')
 g = Github(GITHUB_TOKEN)
 
 @app.get("/")

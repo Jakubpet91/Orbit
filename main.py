@@ -37,40 +37,48 @@ async def github_webhook(request: Request):
             repo = g.get_repo(repo_name)
             pr = repo.get_pull(pr_number)
             
-            # --- Tady byl ten chybějící cyklus ---
             diff_text = ""
             for file in pr.get_files():
-                diff_text += f"Soubor: {file.filename}\n{file.patch}\n\n"
+                # Někdy je patch None (u velkých nebo binárních souborů)
+                patch = file.patch if file.patch else "Změna obsahu není k dispozici."
+                diff_text += f"Soubor: {file.filename}\n{patch}\n\n"
 
             if not diff_text:
-                print("⚠️ Žádné změny v souborech k analýze.")
+                print("⚠️ Žádný text k analýze.")
                 return {"status": "ok"}
 
-            # PŘÍMÉ VOLÁNÍ GEMINI PŘES REST API (Vynutíme v1)
-# Změň tento řádek na verzi 2.5, kterou máš potvrzenou ze seznamu:
+            # PŘÍMÉ VOLÁNÍ GEMINI 2.5 (Vynutíme v1)
             url = f"https://generativelanguage.googleapis.com/v1/models/gemini-2.5-flash:generateContent?key={GEMINI_KEY}"
             headers = {'Content-Type': 'application/json'}
             data = {
                 "contents": [{
-                    "parts": [{"text": f"Jsi expert na infrastrukturu. Zkontroluj kód a napiš krátký český komentář pro vývojáře:\n\n{diff_text}"}]
+                    "parts": [{"text": f"Jsi expert na IT infrastrukturu. Udělej krátkou a věcnou českou recenzi tohoto kódu z hlediska bezpečnosti a efektivity:\n\n{diff_text}"}]
                 }]
             }
 
             async with httpx.AsyncClient() as client:
-                res = await client.post(url, json=data, headers=headers)
+                res = await client.post(url, json=data, headers=headers, timeout=30.0)
                 result = res.json()
                 
                 if res.status_code != 200:
-                    # Pokud tady dostaneme chybu, uvidíme přesně proč (např. špatný klíč)
-                    raise Exception(f"Google API Error: {result}")
+                    print(f"❌ Detail chyby od Googlu: {result}")
+                    raise Exception(f"Google API Error {res.status_code}")
                 
-                ai_review = result['candidates'][0]['content']['parts'][0]['text']
+                # Bezpečné vytažení textu z odpovědi
+                try:
+                    ai_review = result['candidates'][0]['content']['parts'][0]['text']
+                except (KeyError, IndexError):
+                    print(f"❌ Divná odpověď od Googlu: {result}")
+                    raise Exception("Nepodařilo se přečíst odpověď od AI.")
 
-            pr.create_issue_comment(f"🤖 **InfraGuard Gemini Review:**\n\n{ai_review}")
-            print(f"✅ Recenze úspěšně odeslána!")
+            # Odeslání na GitHub
+            pr.create_issue_comment(f"🤖 **InfraGuard (Gemini 2.5 Flash) Review:**\n\n{ai_review}")
+            print(f"✅ Recenze odeslána na GitHub!")
             
     except Exception as e:
-        print(f"❌ CHYBA: {str(e)}")
+        print(f"❌ KRITICKÁ CHYBA: {str(e)}")
+        import traceback
+        traceback.print_exc() # Tohle nám do logu vypíše přesně, kde to ruplo
         return {"status": "error", "reason": str(e)}
 
     return {"status": "ok"}

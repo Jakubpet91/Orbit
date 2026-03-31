@@ -54,6 +54,6 @@ module "database" {
   delegated_subnet_id    = module.network.db_subnet_id
   private_dns_zone_id    = module.network.postgres_private_dns_zone_id
   administrator_login    = var.db_administrator_login
-  administrator_password = var.db_administrator_password
+  administrator_password = test123
   sku_name               = var.db_sku_name
 }

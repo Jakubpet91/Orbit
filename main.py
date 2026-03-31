@@ -3,6 +3,7 @@ from fastapi import FastAPI, Request
 import uvicorn
 import google.generativeai as genai
 from github import Github
+import httpx
 
 app = FastAPI()
 
@@ -36,16 +37,28 @@ async def github_webhook(request: Request):
             repo = g.get_repo(repo_name)
             pr = repo.get_pull(pr_number)
             
-            diff_text = ""
-            for file in pr.get_files():
-                diff_text += f"Soubor: {file.filename}\n{file.patch}\n\n"
+            adiff_text = f"Soubor: {file.filename}\n{file.patch}\n\n"
 
-            # Volání AI
-            response = model.generate_content(f"Jsi expert. Udělej krátkou českou recenzi kódu:\n\n{diff_text}")
-            
-            # Odeslání komentáře
-            pr.create_issue_comment(f"🤖 **InfraGuard Review:**\n\n{response.text}")
-            print(f"✅ Recenze odeslána!")
+            # PŘÍMÉ VOLÁNÍ GEMINI PŘES REST API (Vynutíme v1)
+            url = f"https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key={GEMINI_KEY}"
+            headers = {'Content-Type': 'application/json'}
+            data = {
+                "contents": [{
+                    "parts": [{"text": f"Jsi expert na infrastrukturu. Zkontroluj kód a napiš krátký český komentář:\n\n{diff_text}"}]
+                }]
+            }
+
+            async with httpx.AsyncClient() as client:
+                res = await client.post(url, json=data, headers=headers)
+                result = res.json()
+                
+                if res.status_code != 200:
+                    raise Exception(f"Google API Error: {result}")
+                
+                ai_review = result['candidates'][0]['content']['parts'][0]['text']
+
+            pr.create_issue_comment(f"🤖 **InfraGuard Gemini Review:**\n\n{ai_review}")
+            print(f"✅ Recenze úspěšně odeslána!")
             
     except Exception as e:
         print(f"❌ CHYBA: {str(e)}")

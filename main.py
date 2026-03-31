@@ -10,11 +10,10 @@ app = FastAPI()
 GEMINI_KEY = os.getenv("GEMINI_API_KEY")
 GITHUB_TOKEN = os.getenv("GITHUB_TOKEN")
 
-genai.configure(api_key=GEMINI_KEY)
+genai.configure(api_key=GEMINI_KEY, transport='rest') 
 
-model = genai.GenerativeModel(
-    model_name='gemini-1.5-flash',
-)
+# Použijeme tento specifický název, který v1 API miluje
+model = genai.GenerativeModel('gemini-1.5-flash') 
 g = Github(GITHUB_TOKEN)
 
 @app.get("/")

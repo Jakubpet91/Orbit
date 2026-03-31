@@ -37,14 +37,21 @@ async def github_webhook(request: Request):
             repo = g.get_repo(repo_name)
             pr = repo.get_pull(pr_number)
             
-            adiff_text = f"Soubor: {file.filename}\n{file.patch}\n\n"
+            # --- Tady byl ten chybějící cyklus ---
+            diff_text = ""
+            for file in pr.get_files():
+                diff_text += f"Soubor: {file.filename}\n{file.patch}\n\n"
+
+            if not diff_text:
+                print("⚠️ Žádné změny v souborech k analýze.")
+                return {"status": "ok"}
 
             # PŘÍMÉ VOLÁNÍ GEMINI PŘES REST API (Vynutíme v1)
             url = f"https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key={GEMINI_KEY}"
             headers = {'Content-Type': 'application/json'}
             data = {
                 "contents": [{
-                    "parts": [{"text": f"Jsi expert na infrastrukturu. Zkontroluj kód a napiš krátký český komentář:\n\n{diff_text}"}]
+                    "parts": [{"text": f"Jsi expert na infrastrukturu. Zkontroluj kód a napiš krátký český komentář pro vývojáře:\n\n{diff_text}"}]
                 }]
             }
 
@@ -53,6 +60,7 @@ async def github_webhook(request: Request):
                 result = res.json()
                 
                 if res.status_code != 200:
+                    # Pokud tady dostaneme chybu, uvidíme přesně proč (např. špatný klíč)
                     raise Exception(f"Google API Error: {result}")
                 
                 ai_review = result['candidates'][0]['content']['parts'][0]['text']

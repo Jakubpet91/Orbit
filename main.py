@@ -6,18 +6,15 @@ from github import Github
 
 app = FastAPI()
 
+# KONFIGURACE
 GEMINI_KEY = os.getenv("GEMINI_API_KEY")
 GITHUB_TOKEN = os.getenv("GITHUB_TOKEN")
 
-# Vynutíme verzi v1 a REST transport, aby to neskákalo do v1beta
-genai.configure(api_key=GEMINI_KEY, transport='rest')
+# Jednoduchá konfigurace
+genai.configure(api_key=GEMINI_KEY)
 
-# Definujeme model s explicitním názvem pro v1
+# Použijeme model Flash - v roce 2026 je to nejstabilnější volba
 model = genai.GenerativeModel('gemini-1.5-flash')
-
-# Tady je trik: Ručně přenastavíme klientskou verzi, pokud by to knihovna zkoušela obejít
-model._client.common_metadata.update([('x-goog-api-client', 'genai-py/0.7.2 gapic/v1')])
-
 g = Github(GITHUB_TOKEN)
 
 @app.get("/")
@@ -28,9 +25,7 @@ async def root():
 async def github_webhook(request: Request):
     try:
         payload = await request.json()
-        
-        # Logování pro nás, abychom věděli, že data dorazila
-        print("📥 Přijat webhook z GitHubu...")
+        print("📥 Přijat webhook...")
 
         if "pull_request" in payload and payload.get("action") in ["opened", "synchronize"]:
             repo_name = payload["repository"]["full_name"]
@@ -45,16 +40,14 @@ async def github_webhook(request: Request):
             for file in pr.get_files():
                 diff_text += f"Soubor: {file.filename}\n{file.patch}\n\n"
 
-            prompt = f"Jsi expert na infrastrukturu. Zkontroluj kód a napiš krátký český komentář:\n\n{diff_text}"
-
-            response = model.generate_content(prompt)
-            ai_review = response.text
-
-            pr.create_issue_comment(f"🤖 **InfraGuard Gemini Review:**\n\n{ai_review}")
-            print(f"✅ Recenze úspěšně odeslána na GitHub!")
+            # Volání AI
+            response = model.generate_content(f"Jsi expert. Udělej krátkou českou recenzi kódu:\n\n{diff_text}")
+            
+            # Odeslání komentáře
+            pr.create_issue_comment(f"🤖 **InfraGuard Review:**\n\n{response.text}")
+            print(f"✅ Recenze odeslána!")
             
     except Exception as e:
-        # TOHLE JE KLÍČOVÉ - vypíše to chybu do Render logu!
         print(f"❌ CHYBA: {str(e)}")
         return {"status": "error", "reason": str(e)}
 

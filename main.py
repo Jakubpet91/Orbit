@@ -47,7 +47,8 @@ async def github_webhook(request: Request):
                 return {"status": "ok"}
 
             # PŘÍMÉ VOLÁNÍ GEMINI PŘES REST API (Vynutíme v1)
-            url = f"https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key={GEMINI_KEY}"
+# Změň tento řádek na verzi 2.5, kterou máš potvrzenou ze seznamu:
+            url = f"https://generativelanguage.googleapis.com/v1/models/gemini-2.5-flash:generateContent?key={GEMINI_KEY}"
             headers = {'Content-Type': 'application/json'}
             data = {
                 "contents": [{

@@ -1,3 +1,6 @@
 fastapi
 uvicorn
 httpx
+PyGithub
+python-gitlab
+python-dotenv

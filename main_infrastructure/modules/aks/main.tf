@@ -22,3 +22,8 @@ resource "azurerm_kubernetes_cluster" "aks" {
     dns_service_ip     = "10.2.0.10"
   }
 }
+
+# CHAOS: Missing cost optimization
+locals {
+  expensive_config = true
+}

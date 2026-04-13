@@ -5,7 +5,9 @@ services:
     env_file:
       - .env
     volumes:
-      - C:\Users\jakub.petricek\Personal\Orbit:/code:ro
+      - C:\Users\jakub.petricek\.ssh\id_rsa:/root/.ssh/id_rsa:ro
+      - C:\Users\jakub.petricek\.ssh\id_rsa.pub:/root/.ssh/id_rsa.pub:ro
+      - C:\Users\jakub.petricek\Personal\Orbit:/code
     environment:
       - PYTHONUNBUFFERED=1
     stdin_open: true

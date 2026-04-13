@@ -7,7 +7,7 @@ Použití:
   uvicorn main:app --host 0.0.0.0 --port 8000
 
 Webhooks:
-  POST /webhook          -> GitHub PR webhook
+  POST /webhook           -> GitHub PR webhook
   POST /webhook/gitlab   -> GitLab MR webhook
   GET /health            -> Health check endpoint
 """
@@ -36,6 +36,9 @@ GITHUB_TOKEN = os.getenv("GITHUB_TOKEN")
 GITLAB_TOKEN = os.getenv("GITLAB_TOKEN")
 GITLAB_URL = os.getenv("GITLAB_URL", "https://gitlab.com")
 
+# Dynamický filtr cílové větve (nastavitelné v Renderu: např. "main" nebo "test")
+TARGET_BRANCH_FILTER = os.getenv("TARGET_BRANCH_FILTER", "main")
+
 if not GEMINI_API_KEY:
     raise ValueError("❌ Chybí povinná proměnná prostředí: GEMINI_API_KEY")
 
@@ -63,10 +66,16 @@ async def github_webhook(request: Request):
             logger.info("⏭️  Ignoruji webhook (není PR nebo action)")
             return {"status": "ignored"}
 
+        # --- BRANCH FILTER ---
+        target_branch = payload["pull_request"]["base"]["ref"]
+        if target_branch != TARGET_BRANCH_FILTER:
+            logger.info(f"⏭️  Ignoruji PR: Cíl je {target_branch}, ale filtr je nastaven na {TARGET_BRANCH_FILTER}")
+            return {"status": "ignored", "reason": f"Target branch is not {TARGET_BRANCH_FILTER}"}
+
         repo_name = payload["repository"]["full_name"]
         pr_number = payload["pull_request"]["number"]
         
-        logger.info(f"🤖 Analyzuji {repo_name} PR #{pr_number}")
+        logger.info(f"🤖 Analyzuji {repo_name} PR #{pr_number} (Cíl: {target_branch})")
         
         # PyGithub - extrahuj diff z PR
         g = Github(GITHUB_TOKEN)
@@ -138,11 +147,17 @@ async def webhook_gitlab(request: Request):
             logger.info("⏭️  Ignoruji GitLab webhook (není MR nebo action)")
             return {"status": "ignored"}
 
+        # --- BRANCH FILTER ---
+        target_branch = attrs.get("target_branch", "")
+        if target_branch != TARGET_BRANCH_FILTER:
+            logger.info(f"⏭️  Ignoruji MR: Cíl je {target_branch}, ale filtr je nastaven na {TARGET_BRANCH_FILTER}")
+            return {"status": "ignored", "reason": f"Target branch is not {TARGET_BRANCH_FILTER}"}
+
         project_id = payload["project"]["id"]
         mr_iid = attrs["iid"]
         project_name = payload["project"]["path_with_namespace"]
         
-        logger.info(f"🤖 Analyzuji {project_name} MR #{mr_iid}")
+        logger.info(f"🤖 Analyzuji {project_name} MR #{mr_iid} (Cíl: {target_branch})")
         
         changes_url = f"{GITLAB_URL}/api/v4/projects/{project_id}/merge_requests/{mr_iid}/changes"
         
@@ -216,6 +231,7 @@ def read_root():
         "service": "InfraGuard Sentinel",
         "version": "2.0",
         "mode": "production",
+        "filter_active_on": TARGET_BRANCH_FILTER,
         "webhooks": [
             {"path": "/webhook", "type": "GitHub PR"},
             {"path": "/webhook/gitlab", "type": "GitLab MR"}
@@ -229,7 +245,8 @@ def health_check():
     return {
         "status": "healthy",
         "service": "InfraGuard Sentinel",
-        "version": "2.0"
+        "version": "2.0",
+        "target_filter": TARGET_BRANCH_FILTER
     }
 
 
@@ -237,4 +254,5 @@ if __name__ == "__main__":
     import uvicorn
     port = int(os.getenv("PORT", 8000))
     logger.info(f"🚀 Spouštím InfraGuard Sentinel na portu {port}...")
+    logger.info(f"📌 Aktivní filtr pro cílovou větev: {TARGET_BRANCH_FILTER}")
     uvicorn.run(app, host="0.0.0.0", port=port)

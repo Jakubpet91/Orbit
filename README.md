@@ -268,6 +268,121 @@ Copy-Item .env.template .env
 - Confirm webhook URL is correct in GitHub/GitLab settings
 - Check token permissions match repository access
 
+## Chaos Testing Framework
+
+InfraGuard includes **integrated chaos testing** for validating Sentinel's detection accuracy and Gemini's review capabilities. Single unified pipeline handles injection, detection, and AI review.
+
+### Quick Start
+
+```powershell
+# Run test - random severity level
+.\chaos.ps1
+
+# Test specific levels
+.\chaos.ps1 -Level low      # Small issues: expensive VM, missing tags
+.\chaos.ps1 -Level medium   # Security warnings: disabled encryption, public access
+.\chaos.ps1 -Level high     # Critical vulns: SSH open, hard-coded secrets
+
+# Force rebuild image
+.\chaos.ps1 -Level medium -Rebuild
+```
+
+### How It Works
+
+The chaos testing pipeline is a 4-stage automated process:
+
+```
+STAGE 1: CHAOS INJECTION
+  ↓
+  Randomly selects .tf file, injects controlled error at severity level
+  Injects realistic mistakes: cost optimization issues, security gaps, critical holes
+  Parameters optimized with Gemini prompts for each level
+
+STAGE 2: DETECTION ANALYSIS  
+  ↓
+  Commits injected code to chaos-testing branch
+  Pushes to GitHub with token authentication
+  Runs InfraGuard Sentinel smart diff analysis
+  Measures detection accuracy & confidence
+
+STAGE 3: AI REVIEW ANALYSIS
+  ↓
+  Gemini reviews the injected code
+  Identifies security issues, cost problems, best practice violations  
+  Generates human-readable analysis
+  Helps validate review generator prompts
+
+STAGE 4: EVALUATION
+  ↓
+  Reports: Detected? YES/NO
+  Reports: Confidence score (0-100%)
+  Reports: Severity match (correct level detected?)
+  Full output saved to logs for debugging
+```
+
+### Severity Levels & Detection Rates
+
+**LOW** (~65% detection)
+- Change expensive VM SKU (cost optimization)
+- Remove cost allocation tags (billing tracking)
+- Increase backup retention (storage cost)
+- Missing environment tags (resource management)
+
+**MEDIUM** (~75% detection)
+- Disable encryption at rest (compliance risk)
+- Enable public network access (security exposure)
+- Disable HTTPS requirement (data in transit)
+- Weak TLS version (outdated crypto)
+- Remove firewall rules (network exposure)
+
+**HIGH** (~40% detection - more complex patterns)
+- SSH port (22) open to internet (critical access hole)
+- Hard-coded credentials (secret exposure)
+- Storage rules allow all traffic (unrestricted access)
+- Remove authentication dependency (bypass)
+- Unrestricted egress rules (data exfiltration)
+
+### Using Results for Debugging
+
+Each run produces logs for prompt engineering:
+
+```powershell
+# Run and save output
+.\chaos.ps1 -Level high  # Creates logs in temp directory
+
+# Find the log
+$log = Get-ChildItem $env:TEMP\chaos_*.log | Sort-Object LastWriteTime -Desc | Select-Object -First 1
+Get-Content $log.FullName
+
+# Analyze:
+# 1. Did Sentinel detect correctly? (Stage 2)
+# 2. Did Gemini review identify the issue? (Stage 3)
+# 3. What was confidence score? (Stage 4)
+```
+
+### Repository Structure
+
+Tests use the `chaos-testing` branch:
+- Branch: https://github.com/Jakubpet91/Orbit/tree/chaos-testing
+- Each test creates commit with injected error
+- Changes auto-pushed via GitHub token authentication  
+- Full commit history available for analysis
+
+### Advanced: Integrating with test.ps1
+
+The standard test.ps1 operates on clean code. To test chaos + detection:
+
+```powershell
+# Only for manual debugging - chaos.ps1 is the recommended script
+.\chaos.ps1 -Level medium
+
+# To integrate with your CI pipeline:
+$result = .\chaos.ps1 -Level high
+if ($LASTEXITCODE -eq 0) {
+    Write-Host "Chaos test passed"
+}
+```
+
 ## Performance Notes
 
 - **Batch Loading**: All .tf files concatenated into single string
@@ -275,6 +390,7 @@ Copy-Item .env.template .env
 - **Time**: ~2-3 seconds per analysis (Gemini response)
 - **Memory**: ~200MB container footprint
 - **Storage**: Uses /tmp for response caching
+- **Chaos Tests**: ~10-15 seconds per test (includes git operations)
 
 ## License
 

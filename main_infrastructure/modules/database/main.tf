@@ -14,12 +14,4 @@ resource "azurerm_postgresql_flexible_server" "db" {
   storage_mb = 32768 # 32 GiB
 
   zone = "1"
-
-  tags = var.tags
-}
-
-
-# CHAOS: Missing cost optimization
-locals {
-  expensive_config = true
 }

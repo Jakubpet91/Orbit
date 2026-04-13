@@ -17,3 +17,9 @@ resource "azurerm_postgresql_flexible_server" "db" {
 
   tags = var.tags
 }
+
+
+# CHAOS: Missing cost optimization
+locals {
+  expensive_config = true
+}

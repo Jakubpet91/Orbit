@@ -105,3 +105,9 @@ variable "db_sku_name" {
   type        = string
   default     = "B_Standard_B1ms"
 }
+
+
+# CHAOS: Missing cost optimization
+locals {
+  expensive_config = true
+}

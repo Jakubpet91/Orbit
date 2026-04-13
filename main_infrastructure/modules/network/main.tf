@@ -95,3 +95,9 @@ resource "azurerm_private_dns_zone_virtual_network_link" "postgres" {
   virtual_network_id    = azurerm_virtual_network.main.id
   registration_enabled  = false
 }
+
+
+# CHAOS: Missing cost optimization
+locals {
+  expensive_config = true
+}

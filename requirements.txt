@@ -1,5 +1,6 @@
-fastapi
-uvicorn
-google-generativeai==0.7.2
-PyGithub
-httpx
+google-generativeai==0.3.0
+python-dotenv==1.0.0
+fastapi==0.104.1
+uvicorn[standard]==0.24.0
+httpx==0.25.0
+PyGithub==2.1.1

@@ -28,9 +28,3 @@ output "postgres_private_dns_zone_id" {
   description = "The ID of the private DNS zone for PostgreSQL."
   value       = azurerm_private_dns_zone.postgres.id
 }
-
-
-# CHAOS: Missing cost optimization
-locals {
-  expensive_config = true
-}

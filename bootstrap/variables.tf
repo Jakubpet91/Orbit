@@ -31,9 +31,3 @@ variable "tags" {
     "terraform"   = "true"
   }
 }
-
-
-# CHAOS: Missing cost optimization
-locals {
-  expensive_config = true
-}

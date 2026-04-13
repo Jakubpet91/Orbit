@@ -1,0 +1,13 @@
+services:
+  infraguard-sentinel:
+    build: .
+    container_name: infraguard-sentinel
+    env_file:
+      - .env
+    volumes:
+      - C:\Users\jakub.petricek\Personal\Orbit:/code:ro
+    environment:
+      - PYTHONUNBUFFERED=1
+    stdin_open: true
+    tty: true
+    command: tail -f /dev/null

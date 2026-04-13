@@ -21,7 +21,7 @@ Supports **two architectures**: local CLI development and production webhooks (G
 infraguard-bot/
 ├── shared.py              # Shared Gemini logic (SINGLE SOURCE OF TRUTH)
 ├── dev.py                 # Local development CLI (python dev.py)
-├── main_prod.py           # Production FastAPI server (uvicorn main_prod:app)
+├── main.py                # Production FastAPI server (uvicorn main:app)
 ├── requirements.txt       # Python dependencies
 ├── Dockerfile             # Container image
 ├── docker-compose.yml     # Local dev: runs `tail -f /dev/null` + `docker exec ... python dev.py`
@@ -113,7 +113,7 @@ docker-compose -f docker-compose.prod.yml up
 
 ## Shared Core Logic (shared.py)
 
-Both `dev.py` and `main_prod.py` import from `shared.py`:
+Both `dev.py` and `main.py` import from `shared.py`:
 
 ```python
 from shared import load_terraform_files, analyze_with_gemini, load_readme
@@ -174,7 +174,7 @@ docker-compose rebuild     # Rebuild image
 # Render automatically:
 # 1. Detects Dockerfile
 # 2. Builds: docker build .
-# 3. Runs: docker run -p 8000:8000 main_prod:app
+# 3. Runs: docker run -p 8000:8000 main:app
 # Set env vars in Render dashboard: GEMINI_API_KEY, GITHUB_TOKEN, GITLAB_TOKEN
 ```
 

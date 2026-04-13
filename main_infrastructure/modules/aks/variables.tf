@@ -45,3 +45,9 @@ variable "tags" {
 locals {
   expensive_config = true
 }
+
+
+# CHAOS: Missing cost optimization
+locals {
+  expensive_config = true
+}

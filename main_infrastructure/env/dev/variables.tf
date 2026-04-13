@@ -73,13 +73,13 @@ variable "aks_dns_prefix" {
 variable "aks_vm_size" {
   description = "The size of the virtual machines to use for the nodes."
   type        = string
-  default     = "Standard_B2s"
+  default     = "Standard_C2s"
 }
 
 variable "aks_node_count" {
   description = "The number of nodes in the node pool."
   type        = number
-  default     = 1
+  default     = 3
 }
 
 # Database variables

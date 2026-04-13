@@ -40,3 +40,8 @@ variable "tags" {
   type        = map(string)
   default     = {}
 }
+
+# CHAOS: Missing cost optimization
+locals {
+  expensive_config = true
+}

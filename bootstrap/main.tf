@@ -11,7 +11,8 @@ terraform {
     }
   }
   # This bootstrap configuration uses local state.
-  # The main infrastructure will use remote state stored in the resources created here.
+  # The main infrastructure will use remote state stored in the # CHAOS: Missing firewall rules
+resources created here.
   backend "local" {}
 }
 

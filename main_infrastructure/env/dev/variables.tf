@@ -79,7 +79,7 @@ variable "aks_vm_size" {
 variable "aks_node_count" {
   description = "The number of nodes in the node pool."
   type        = number
-  default     = 3
+  default     = 4
 }
 
 # Database variables

@@ -4,7 +4,7 @@ Automatické code review pro GitHub PR a GitLab MR
 Analýza změn při otevření/aktualizaci PR/MR
 
 Použití:
-  uvicorn main_prod:app --host 0.0.0.0 --port 8000
+  uvicorn main:app --host 0.0.0.0 --port 8000
 
 Webhooks:
   POST /webhook          -> GitHub PR webhook

@@ -24,7 +24,7 @@ import httpx
 load_dotenv()
 
 # Import shared logic
-from shared import analyze_with_gemini
+from shared import analyze_with_gemini, extract_diff_with_context, estimate_tokens
 
 # --- Konfigurace ---
 
@@ -76,16 +76,26 @@ async def github_webhook(request: Request):
         diff_text = ""
         modified_files = []
         
+        logger.info("[SMART DIFF] GitHub: Extracting PR files with smart diff...")
         for file in pr.get_files():
             modified_files.append(file.filename)
-            patch = file.patch if file.patch else "Změna obsahu není k dispozici."
-            diff_text += f"Soubor: {file.filename}\n{patch}\n\n"
+            patch = file.patch if file.patch else ""
+            
+            if patch:
+                # Smart extraction: kontext + změny
+                smart_patch = extract_diff_with_context(patch, context_lines=10)
+                diff_text += f"--- {file.filename}\n{smart_patch}\n\n"
+            else:
+                # No patch = file only added/deleted symbolically
+                diff_text += f"--- {file.filename} [No content change detected]\n\n"
 
         if not diff_text:
             logger.warning("⚠️  Žádný text k analýze.")
             return {"status": "ok"}
 
-        logger.info(f"📊 Odesílám na Gemini ({len(diff_text)} znaků)...")
+        # Token estimate
+        estimated_tokens = estimate_tokens(diff_text)
+        logger.info(f"[TOKEN ESTIMATE] GitHub PR: ~{estimated_tokens} tokens to be used in Gemini call")
         
         # Analyze with Gemini
         analysis_result = await analyze_with_gemini(
@@ -142,14 +152,29 @@ async def webhook_gitlab(request: Request):
             response.raise_for_status()
             
             changes_data = response.json()
-            diff_text = "\n".join([c.get("diff", "") for c in changes_data.get("changes", [])])
-            modified_files = [c.get("new_path") for c in changes_data.get("changes", [])]
+            modified_files = []
+            diff_text = ""
+            
+            logger.info("[SMART DIFF] GitLab: Extracting MR files with smart diff...")
+            for change in changes_data.get("changes", []):
+                new_path = change.get("new_path", "unknown")
+                modified_files.append(new_path)
+                
+                patch = change.get("diff", "")
+                if patch:
+                    # Smart extraction: kontext + změny
+                    smart_patch = extract_diff_with_context(patch, context_lines=10)
+                    diff_text += f"--- {new_path}\n{smart_patch}\n\n"
+                else:
+                    diff_text += f"--- {new_path} [No content change detected]\n\n"
 
         if not diff_text:
             logger.warning("⚠️  Žádný text k analýze v GitLab MR")
             return {"status": "ok"}
 
-        logger.info(f"📊 Odesílám na Gemini ({len(diff_text)} znaků)...")
+        # Token estimate
+        estimated_tokens = estimate_tokens(diff_text)
+        logger.info(f"[TOKEN ESTIMATE] GitLab MR: ~{estimated_tokens} tokens to be used in Gemini call")
         
         # Analýza
         analysis_result = await analyze_with_gemini(

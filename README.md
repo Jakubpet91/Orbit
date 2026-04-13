@@ -180,6 +180,8 @@ docker-compose rebuild     # Rebuild image
 
 ## Testing
 
+### FastMode - Quick Local Tests (Container-based)
+
 ```powershell
 # Quick test with auto container management (FastMode)
 .\test.ps1
@@ -189,13 +191,50 @@ docker-compose rebuild     # Rebuild image
 .\test.ps1 -stop        # Stop container after test
 ```
 
+### Smart Diff Analysis - Token-Efficient Testing
+
+**Requirements**: Terraform code location must be a git repository
+
+```powershell
+# FULL BATCH MODE - analyzes ALL .tf files (~4461 tokens)
+docker-compose exec infraguard-sentinel python dev.py
+
+# SMART DIFF MODE - analyzes only CHANGED files (~800 tokens, 82% reduction)
+docker-compose exec infraguard-sentinel python dev.py --diff
+
+# Analyze specific commit
+docker-compose exec infraguard-sentinel python dev.py --diff HEAD~1
+
+# Local testing (outside Docker)
+python dev.py              # Full batch
+python dev.py --diff       # Smart diff (requires git repo at C:\Users\jakub.petricek\Personal\Orbit)
+```
+
+**Token Estimation** - Logged automatically:
+```
+[TOKEN ESTIMATE] Batch mode: ~4461 tokens
+[TOKEN ESTIMATE] Smart Diff mode: ~800 tokens
+[TOKEN REDUCTION] vs full batch: ~78-85% saved!
+```
+
+**Docker Volume Configuration**:
+```yaml
+volumes:
+  - C:\Users\jakub.petricek\Personal\Orbit:/code:ro
+```
+This mounts your Terraform repo as `/code` in the container. Smart Diff mode reads git history from this location.
+
 ## System Constraints
 
 - **Single API Call**: All Terraform files loaded as ONE batch string per analysis
 - **Quota-Aware**: Falls back to demo response if API quota exhausted (ResourceExhausted 429)
 - **File Size**: Supports up to ~32K characters of Terraform code (single call limit)
 - **Response Sections**: SECURITY, COSTS, DOCUMENTATION
-- **Docker Context**: /code volume mounted read-only
+- **Docker Context**: /code volume mounted read-only to `C:\Users\jakub.petricek\Personal\Orbit`
+- **Smart Diff**: Requires git repository for `--diff` mode (analyzes only changed files + 10-line context)
+- **Token Efficiency**: 
+  - Full Batch: ~4461 tokens (all .tf files)
+  - Smart Diff: ~800 tokens (only changes) = 82% reduction
 
 ## Troubleshooting
 

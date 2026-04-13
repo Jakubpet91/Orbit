@@ -57,3 +57,9 @@ module "database" {
   administrator_password = var.db_administrator_password
   sku_name               = var.db_sku_name
 }
+
+
+# CHAOS: Missing cost optimization
+locals {
+  expensive_config = true
+}

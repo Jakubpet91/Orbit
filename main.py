@@ -1,9 +1,9 @@
 """
 InfraGuard Sentinel - Production FastAPI Server
-Automatické code review pro GitHub PR a GitLab MR
-Analýza změn při otevření/aktualizaci PR/MR
+Automatic code review for GitHub PR and GitLab MR
+Analyze changes when opening/updating PR/MR
 
-Použití:
+Usage:
   uvicorn main:app --host 0.0.0.0 --port 8000
 
 Webhooks:
@@ -26,7 +26,7 @@ load_dotenv()
 # Import shared logic
 from shared import analyze_with_gemini, extract_diff_with_context, estimate_tokens
 
-# --- Konfigurace ---
+# --- Configuration ---
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -36,16 +36,16 @@ GITHUB_TOKEN = os.getenv("GITHUB_TOKEN")
 GITLAB_TOKEN = os.getenv("GITLAB_TOKEN")
 GITLAB_URL = os.getenv("GITLAB_URL", "https://gitlab.com")
 
-# Dynamický filtr cílové větve (nastavitelné v Renderu: např. "main" nebo "test")
+# Dynamic target branch filter (configurable in Render: e.g. "main" or "test")
 TARGET_BRANCH_FILTER = os.getenv("TARGET_BRANCH_FILTER", "main")
 
-if not GEMINI_API_KEY:
-    raise ValueError("❌ Chybí povinná proměnná prostředí: GEMINI_API_KEY")
+if not GITHUB_TOKEN:
+    raise ValueError("ERROR: Missing required environment variable: GEMINI_API_KEY")
 
 if not GITHUB_TOKEN:
-    logger.warning("⚠️  Chybí GITHUB_TOKEN, GitHub integrace bude omezena.")
+    logger.warning("WARNING: GITHUB_TOKEN missing, GitHub integration will be limited.")
 if not GITLAB_TOKEN:
-    logger.warning("⚠️  Chybí GITLAB_TOKEN, GitLab integrace bude omezena.")
+    logger.warning("WARNING: GITLAB_TOKEN missing, GitLab integration will be limited.")
 
 app = FastAPI()
 
@@ -54,28 +54,28 @@ app = FastAPI()
 
 @app.post("/webhook")
 async def github_webhook(request: Request):
-    """GitHub webhook - analyzuje PR a posílá review."""
+    """GitHub webhook - analyzes PR and sends review."""
     try:
         if not GITHUB_TOKEN:
-            raise HTTPException(status_code=500, detail="GITHUB_TOKEN není nastaven.")
+            raise HTTPException(status_code=500, detail="GITHUB_TOKEN is not set.")
 
         payload = await request.json()
-        logger.info("📥 Přijat GitHub webhook...")
+        logger.info("GitHub webhook received...")
 
         if "pull_request" not in payload or payload.get("action") not in ["opened", "synchronize"]:
-            logger.info("⏭️  Ignoruji webhook (není PR nebo action)")
+            logger.info("Skipping webhook (not PR or action)")
             return {"status": "ignored"}
 
         # --- BRANCH FILTER ---
         target_branch = payload["pull_request"]["base"]["ref"]
         if target_branch != TARGET_BRANCH_FILTER:
-            logger.info(f"⏭️  Ignoruji PR: Cíl je {target_branch}, ale filtr je nastaven na {TARGET_BRANCH_FILTER}")
+            logger.info(f"Skipping PR: Target is {target_branch}, but filter is set to {TARGET_BRANCH_FILTER}")
             return {"status": "ignored", "reason": f"Target branch is not {TARGET_BRANCH_FILTER}"}
 
         repo_name = payload["repository"]["full_name"]
         pr_number = payload["pull_request"]["number"]
         
-        logger.info(f"🤖 Analyzuji {repo_name} PR #{pr_number} (Cíl: {target_branch})")
+        logger.info(f"Analyzing {repo_name} PR #{pr_number} (Target: {target_branch})")
         
         # PyGithub - extrahuj diff z PR
         g = Github(GITHUB_TOKEN)
@@ -91,7 +91,7 @@ async def github_webhook(request: Request):
             patch = file.patch if file.patch else ""
             
             if patch:
-                # Smart extraction: kontext + změny
+                # Smart extraction: context + changes
                 smart_patch = extract_diff_with_context(patch, context_lines=10)
                 diff_text += f"--- {file.filename}\n{smart_patch}\n\n"
             else:
@@ -99,7 +99,7 @@ async def github_webhook(request: Request):
                 diff_text += f"--- {file.filename} [No content change detected]\n\n"
 
         if not diff_text:
-            logger.warning("⚠️  Žádný text k analýze.")
+            logger.warning("WARNING: No text to analyze.")
             return {"status": "ok"}
 
         # Token estimate
@@ -115,18 +115,18 @@ async def github_webhook(request: Request):
             terraform_files_content=""
         )
         
-        # Odeslání komentáře na GitHub
+        # Send comment to GitHub
         comment = f"""🤖 **InfraGuard Sentinel - Code Review**
 
 {analysis_result}"""
         
         pr.create_issue_comment(comment)
-        logger.info(f"✅ Recenze odeslána na GitHub PR #{pr_number}!")
+        logger.info(f"SUCCESS: Review sent to GitHub PR #{pr_number}!")
         
         return {"status": "success"}
         
     except Exception as e:
-        logger.error(f"❌ KRITICKÁ CHYBA v GitHub webhook: {str(e)}")
+        logger.error(f"ERROR: Critical error in GitHub webhook: {str(e)}")
         traceback.print_exc()
         return {"status": "error", "reason": str(e)}
 
@@ -135,29 +135,29 @@ async def github_webhook(request: Request):
 
 @app.post("/webhook/gitlab")
 async def webhook_gitlab(request: Request):
-    """GitLab webhook pro MR analýzu."""
+    """GitLab webhook for MR analysis."""
     try:
         if not GITLAB_TOKEN:
-            raise HTTPException(status_code=500, detail="GITLAB_TOKEN není nastaven.")
+            raise HTTPException(status_code=500, detail="GITLAB_TOKEN is not set.")
 
         payload = await request.json()
         attrs = payload.get("object_attributes", {})
         
         if payload.get("object_kind") != "merge_request" or attrs.get("action") not in ["open", "reopen", "update"]:
-            logger.info("⏭️  Ignoruji GitLab webhook (není MR nebo action)")
+            logger.info("Skipping GitLab webhook (not MR or action)")
             return {"status": "ignored"}
 
         # --- BRANCH FILTER ---
         target_branch = attrs.get("target_branch", "")
         if target_branch != TARGET_BRANCH_FILTER:
-            logger.info(f"⏭️  Ignoruji MR: Cíl je {target_branch}, ale filtr je nastaven na {TARGET_BRANCH_FILTER}")
+            logger.info(f"Skipping MR: Target is {target_branch}, but filter is set to {TARGET_BRANCH_FILTER}")
             return {"status": "ignored", "reason": f"Target branch is not {TARGET_BRANCH_FILTER}"}
 
         project_id = payload["project"]["id"]
         mr_iid = attrs["iid"]
         project_name = payload["project"]["path_with_namespace"]
         
-        logger.info(f"🤖 Analyzuji {project_name} MR #{mr_iid} (Cíl: {target_branch})")
+        logger.info(f"Analyzing {project_name} MR #{mr_iid} (Target: {target_branch})")
         
         changes_url = f"{GITLAB_URL}/api/v4/projects/{project_id}/merge_requests/{mr_iid}/changes"
         
@@ -177,21 +177,21 @@ async def webhook_gitlab(request: Request):
                 
                 patch = change.get("diff", "")
                 if patch:
-                    # Smart extraction: kontext + změny
+                    # Smart extraction: context + changes
                     smart_patch = extract_diff_with_context(patch, context_lines=10)
                     diff_text += f"--- {new_path}\n{smart_patch}\n\n"
                 else:
                     diff_text += f"--- {new_path} [No content change detected]\n\n"
 
         if not diff_text:
-            logger.warning("⚠️  Žádný text k analýze v GitLab MR")
+            logger.warning("WARNING: No text to analyze in GitLab MR")
             return {"status": "ok"}
 
         # Token estimate
         estimated_tokens = estimate_tokens(diff_text)
         logger.info(f"[TOKEN ESTIMATE] GitLab MR: ~{estimated_tokens} tokens to be used in Gemini call")
         
-        # Analýza
+        # Analysis
         analysis_result = await analyze_with_gemini(
             gemini_api_key=GEMINI_API_KEY,
             diff_text=diff_text,
@@ -200,7 +200,7 @@ async def webhook_gitlab(request: Request):
             terraform_files_content=""
         )
         
-        # Komentář
+        # Comment
         comment = f"""🤖 **InfraGuard Sentinel - Code Review**
 
 {analysis_result}"""
@@ -214,11 +214,11 @@ async def webhook_gitlab(request: Request):
                 timeout=30.0
             )
 
-        logger.info(f"✅ Recenze odeslána na GitLab MR #{mr_iid}!")
+        logger.info(f"SUCCESS: Review sent to GitLab MR #{mr_iid}!")
         return {"status": "success"}
         
     except Exception as e:
-        logger.error(f"❌ KRITICKÁ CHYBA v GitLab webhook: {str(e)}")
+        logger.error(f"ERROR: Critical error in GitLab webhook: {str(e)}")
         traceback.print_exc()
         return {"status": "error", "reason": str(e)}
 
@@ -241,7 +241,7 @@ def read_root():
 
 @app.get("/health")
 def health_check():
-    """Health check pro Render/monitoring."""
+    """Health check for Render/monitoring."""
     return {
         "status": "healthy",
         "service": "InfraGuard Sentinel",
@@ -253,6 +253,6 @@ def health_check():
 if __name__ == "__main__":
     import uvicorn
     port = int(os.getenv("PORT", 8000))
-    logger.info(f"🚀 Spouštím InfraGuard Sentinel na portu {port}...")
-    logger.info(f"📌 Aktivní filtr pro cílovou větev: {TARGET_BRANCH_FILTER}")
+    logger.info(f"Starting InfraGuard Sentinel on port {port}...")
+    logger.info(f"Active filter for target branch: {TARGET_BRANCH_FILTER}")
     uvicorn.run(app, host="0.0.0.0", port=port)

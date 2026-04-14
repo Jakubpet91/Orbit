@@ -206,8 +206,8 @@ Output the modified code directly:
 
 def generate_chaos_mock(terraform_code: str, level: str) -> str:
     """
-    FALLBACK: Mock chaos generator když je Gemini quota vypršená.
-    Vkládá chyby přímo manipulací řetězce.
+    FALLBACK: Mock chaos generator when Gemini quota is exhausted.
+    Injects errors directly by string manipulation.
     """
     
     logger.info(f"🤖 Mock Chaos Generator (level: {level.upper()})")
@@ -282,11 +282,11 @@ def git_automation(file_path: Path, level: str) -> bool:
     
     code_dir = "/code"
     
-    logger.info("🔄 Git Automation počínaje...")
+    logger.info("Starting Git Automation...")
     
     # Configure GitHub token for HTTPS push (if available)
     if GH_TOKEN_CHAOS:
-        logger.info("🔐 GitHub token dostupný, konfiguruju HTTPS push...")
+        logger.info("GitHub token available, configuring HTTPS push...")
         # First, change remote from SSH to HTTPS if needed
         current_remote = subprocess.run(
             ["git", "remote", "get-url", "origin"],
@@ -327,7 +327,7 @@ def git_automation(file_path: Path, level: str) -> bool:
     )
     if rc != 0:
         logger.warning(f"WARNING: Commit failed (nothing to commit): {out}")
-        # Není kritické - pokud se nic nezměnilo
+        # Not critical - if nothing changed
     
     # 4. Push force with token authentication (if available)
     logger.info("Running: git push origin chaos-testing --force")
@@ -398,14 +398,14 @@ async def run_sentinel_diff_analysis() -> str:
             )
         
         output = result.stdout + result.stderr
-        logger.info("✅ Sentinel analýza hotova")
+        logger.info("SUCCESS: Sentinel analysis completed")
         return output
         
     except subprocess.TimeoutExpired:
-        logger.error("❌ Sentinel timeout (60s)")
+        logger.error("ERROR: Sentinel timeout (60s)")
         return ""
     except Exception as e:
-        logger.error(f"❌ Chyba spuštění Sentinela: {e}")
+        logger.error(f"ERROR: Failed to run Sentinel: {e}")
         return ""
 
 
@@ -415,9 +415,9 @@ def evaluate_sentinel_detection(
     chaos_example: str
 ) -> dict:
     """
-    Porovnává Sentinelův output s tím, co jsme vostražili.
+    Compare Sentinel output with what we injected.
     
-    Vrací:
+    Returns:
     {
         "level": "high",
         "injected_chaos": "...",
@@ -446,10 +446,10 @@ def evaluate_sentinel_detection(
     
     # Level-specific detection logic
     if level == "high":
-        # HIGH level - hledáme kritické problémy
+        # HIGH level - looking for critical issues
         critical_keywords = [
             "CRITICAL", "PORT 22", "SSH", "HARDCODED", "SECRET",
-            "0.0.0.0", "INTERNET", "ОТКРЫТ", "NEAUTORIZOVANÝ"
+            "0.0.0.0", "INTERNET", "EXPOSED", "UNAUTHORIZED"
         ]
         
         for keyword in critical_keywords:
@@ -458,16 +458,16 @@ def evaluate_sentinel_detection(
                 evaluation["findings"].append(f"Found keyword: {keyword}")
                 break
         
-        # 🚨 indikuje kritickou závažnost
-        if "🚨" in sentinel_output:
+        # CRITICAL indicator shows critical severity
+        if "CRITICAL" in sentinel_output:
             evaluation["severity_match"] = True
             evaluation["confidence"] = 95
         
     elif level == "medium":
-        # MEDIUM level - hledáme varování
+        # MEDIUM level - look for warnings
         warning_keywords = [
             "ENCRYPTION", "DISABLE", "FIREWALL", "AUTH", "TLS",
-            "NETWORK", "⚠️", "WARNING"
+            "NETWORK", "WARNING"
         ]
         
         for keyword in warning_keywords:
@@ -479,9 +479,9 @@ def evaluate_sentinel_detection(
                 break
     
     elif level == "low":
-        # LOW level - hledáme tipy na optimalizaci
+        # LOW level - look for optimization suggestions
         optimization_keywords = [
-            "COST", "OPTIMIZATION", "INSTANCE", "SKU", "💡", "TIP"
+            "COST", "OPTIMIZATION", "INSTANCE", "SKU", "TIP"
         ]
         
         for keyword in optimization_keywords:
@@ -492,7 +492,7 @@ def evaluate_sentinel_detection(
                 evaluation["confidence"] = 65
                 break
     
-    # Pokud nic nezjistilis - assign minimum
+    # If nothing detected - assign minimum
     if not evaluation["detected"] and evaluation["security_section_found"]:
         evaluation["confidence"] = 40
         evaluation["findings"].append("Security section found but no specific match")
@@ -506,53 +506,53 @@ def evaluate_sentinel_detection(
 
 async def run_chaos_experiment(level: str = "random"):
     """
-    Hlavní orchestrátor Chaos experimentu.
+    Main orchestrator of Chaos experiment.
     """
     
     print("=" * 80)
-    print("🎯 CHAOS & AUTOMATION TESTING AGENT")
+    print("CHAOS & AUTOMATION TESTING AGENT")
     print("=" * 80)
     print()
     
     # Resolve level
     if level == "random":
         level = random.choice(list(CHAOS_LEVELS.keys()))
-        logger.info(f"🎲 Náhodná úroveň: {level.upper()}")
+        logger.info(f"Random level selected: {level.upper()}")
     
     if level not in CHAOS_LEVELS:
-        logger.error(f"❌ Neznámá úroveň: {level}")
+        logger.error(f"ERROR: Unknown level: {level}")
         sys.exit(1)
     
     level_config = CHAOS_LEVELS[level]
     
-    print(f"📊 Úroveň: {level.upper()}")
-    print(f"📋 Popis: {level_config['description']}")
-    print(f"✅ Očekávaná detekce: {level_config['expected']}")
+    print(f"Level: {level.upper()}")
+    print(f"Description: {level_config['description']}")
+    print(f"Expected Detection: {level_config['expected']}")
     print()
     
     # 1. Find terraform files
-    logger.info("🔎 Hledám Terraform soubory...")
+    logger.info("Searching for Terraform files...")
     tf_files = find_terraform_files()
     
     if not tf_files:
-        logger.error("❌ Žádné .tf soubory k testování")
+        logger.error("ERROR: No .tf files to test")
         sys.exit(1)
     
     # 2. Pick random file
     target_file = random.choice(tf_files)
-    logger.info(f"🎯 Vybraný soubor: {target_file}")
+    logger.info(f"Selected file: {target_file}")
     
     # 3. Read current content
     original_content = read_terraform_file(target_file)
     if not original_content:
-        logger.error("❌ Nelze přečíst soubor")
+        logger.error("ERROR: Failed to read file")
         sys.exit(1)
     
-    print(f"📄 Původní soubor: {len(original_content)} chars")
+    print(f"Original file: {len(original_content)} chars")
     print()
     
     # 4. Inject chaos via Gemini
-    logger.info("🤖 Gemini injektuje chaos...")
+    logger.info("Injecting chaos...")
     chaos_example = random.choice(level_config["examples"])
     chaotic_content = await inject_chaos_via_gemini(
         original_content,
@@ -561,28 +561,28 @@ async def run_chaos_experiment(level: str = "random"):
     )
     
     if chaotic_content == original_content:
-        logger.warning("⚠️ Gemini nedokázala změnit kód")
+        logger.warning("WARNING: Gemini failed to change code")
     
     # 5. Write modified file
-    logger.info("✏️ Zapisuji upravený kód...")
+    logger.info("Writing modified code...")
     if not write_terraform_file(target_file, chaotic_content):
-        logger.error("❌ Nelze zapsat soubor")
+        logger.error("ERROR: Failed to write file")
         sys.exit(1)
     
-    print(f"🔄 Nový soubor: {len(chaotic_content)} chars")
-    print(f"🎯 Injected chaos: {chaos_example}")
+    print(f"Modified file: {len(chaotic_content)} chars")
+    print(f"Injected chaos: {chaos_example}")
     print()
     
     # 6. Git automation
     logger.info("📤 Git automation...")
     if not git_automation(target_file, level):
         logger.error("❌ Git automation selhala")
-        # Pojď dál, i když git selhal
+        # Continue anyway, even if git failed
     
     print()
     
     # 7. Run Sentinel analysis
-    logger.info("🔍 Spouštím Sentinel analýzu...")
+    logger.info("Running Sentinel analysis...")
     sentinel_output = await run_sentinel_diff_analysis()
     
     print()
@@ -593,7 +593,7 @@ async def run_chaos_experiment(level: str = "random"):
     print()
     
     # 7.5 Run AI Review via dev.py
-    logger.info("🤖 Spouštím AI Review analýzu...")
+    logger.info("Running AI Review analysis...")
     review_output = await run_sentinel_diff_analysis()  # Same as above but we'll label it differently for review
     
     print("=" * 80)
@@ -626,9 +626,9 @@ async def run_chaos_experiment(level: str = "random"):
     
     # Final verdict
     if evaluation['detected'] and evaluation['severity_match']:
-        print("✅ PASS - Sentinel správně detekoval chybu na správné úrovni!")
+        print("SUCCESS: PASS - Sentinel correctly detected error at correct level!")
     elif evaluation['detected']:
-        print("⚠️ PARTIAL PASS - Sentinel chybu detekoval, ale ne na správné úrovni")
+        print("WARNING: PARTIAL PASS - Sentinel detected error, but not at correct level")
     else:
         print("❌ FAIL - Sentinel chybu nedetekovala")
     
@@ -636,7 +636,7 @@ async def run_chaos_experiment(level: str = "random"):
     print("=" * 80)
     
     # 9. Restore original
-    logger.info("↩️ Restoruju původní soubor...")
+    logger.info("Restoring original file...")
     write_terraform_file(target_file, original_content)
     
     return evaluation

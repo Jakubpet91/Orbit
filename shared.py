@@ -1,6 +1,6 @@
 """
-Sdílená logika pro InfraGuard Sentinel
-- Gemini API integrace
+Shared logic for InfraGuard Sentinel
+- Gemini API integration
 - Loading Terraform files
 - README management
 """
@@ -12,9 +12,9 @@ import google.generativeai as genai
 
 logger = logging.getLogger(__name__)
 
-# --- Master Prompt pro Gemini 2.5 Flash ---
+# --- Master Prompt for Gemini 2.5 Flash ---
 
-SYSTEM_PROMPT = """VÝ JSTE 'InfraGuard Sentinel' - Senior Cloud Security & Infrastructure Review Expert.
+SYSTEM_PROMPT = """YOU ARE 'InfraGuard Sentinel' - Senior Cloud Security & Infrastructure Review Expert.
 
 YOUR TASK: Analyze a complete Terraform project structure where ALL files are visible to you.
 Look for CROSS-FILE relationships and inconsistencies.
@@ -51,33 +51,33 @@ NON-NEGOTIABLE: Always include all three sections. Never skip. Never truncate. I
 
 
 def load_readme(code_dir="/code") -> str:
-    """Pokusí se načíst README.md z složky."""
+    """Attempts to load README.md from folder."""
     readme_path = Path(code_dir) / "README.md"
     if readme_path.exists():
         try:
             with open(readme_path, "r", encoding="utf-8") as f:
                 return f.read()
         except Exception as e:
-            logger.warning(f"Chyba čtení README.md: {e}")
+            logger.warning(f"Error reading README.md: {e}")
             return ""
     return ""
 
 
 def load_terraform_files(code_dir="/code") -> str:
-    """Načte VŠECHNY .tf soubory a vrátí je jako jeden strukturovaný text s oddělovači."""
+    """Loads ALL .tf files and returns them as one structured text with delimiters."""
     code_path = Path(code_dir)
     
     if not code_path.exists():
-        logger.warning(f"Složka {code_dir} neexistuje!")
+        logger.warning(f"Directory {code_dir} does not exist!")
         return ""
     
     tf_files = sorted(list(code_path.rglob("*.tf")))
     
     if not tf_files:
-        logger.warning(f"V {code_dir} nejsou žádné .tf soubory!")
+        logger.warning(f"No .tf files found in {code_dir}!")
         return ""
     
-    logger.info(f"Nalezeno {len(tf_files)} .tf souborů:")
+    logger.info(f"Found {len(tf_files)} .tf files:")
     
     all_content = []
     for tf_file in tf_files:
@@ -86,12 +86,12 @@ def load_terraform_files(code_dir="/code") -> str:
             with open(tf_file, "r", encoding="utf-8") as f:
                 content = f.read()
                 all_content.append(f"FILE: {relative_path} START\n{content}\nFILE: {relative_path} END\n")
-                logger.info(f"  ✅ {relative_path}")
+                logger.info(f"  SUCCESS: {relative_path}")
         except Exception as e:
-            logger.error(f"  ❌ Chyba čtení {relative_path}: {e}")
+            logger.error(f"  ERROR reading {relative_path}: {e}")
     
     combined = "\n".join(all_content)
-    logger.info(f"Celkem načteno: {len(combined)} znaků")
+    logger.info(f"Total loaded: {len(combined)} characters")
     return combined
 
 
@@ -103,12 +103,12 @@ def estimate_tokens(text: str, mode: str = "batch") -> int:
     - 'batch': Full content (no reduction)
     - 'smart_diff': Reduced diff with context (78-85% savings assumed)
     
-    For accurate counts, use Google's tokenizer, ale to je overkill.
+    For accurate counts, use Google's tokenizer, but that's overkill.
     """
     base_tokens = len(text) // 4
     
     if mode == "smart_diff":
-        # Smart Diff redukuje o ~80% (empiricky)
+        # Smart Diff reduces by ~80% (empirically)
         return int(base_tokens * 0.2)
     
     return base_tokens
@@ -116,11 +116,11 @@ def estimate_tokens(text: str, mode: str = "batch") -> int:
 
 def extract_diff_with_context(patch_text: str, context_lines: int = 10) -> str:
     """
-    Extrahuje diff se smyslem - vrací jen změněné řádky + kontext.
-    Redukuje velikost diffu o ~60-70%.
+    Extracts diff with sense - returns only changed lines + context.
+    Reduces diff size by ~60-70%.
     
-    Vstup: Unified diff format (@@...)
-    Výstup: Strukturovaný diff s kontextem
+    Input: Unified diff format (@@...)
+    Output: Structured diff with context
     """
     if not patch_text:
         return ""
@@ -131,25 +131,25 @@ def extract_diff_with_context(patch_text: str, context_lines: int = 10) -> str:
     hunk_header = None
     
     for line in lines:
-        # Detekce hunk headeru: @@ -5,10 +5,12 @@
+        # Hunk header detection: @@ -5,10 +5,12 @@
         if line.startswith("@@"):
             hunk_header = line
             result.append(hunk_header)
             context_buffer = []
         elif hunk_header:
-            # Kontext (nezměněné řádky)
+            # Context (unchanged lines)
             if line.startswith(" "):
                 context_buffer.append(line)
-                # Když máme dost kontextu, zahoď starý
+                # When we have enough context, discard old
                 if len(context_buffer) > context_lines:
                     context_buffer.pop(0)
-            # Změněné řádky
+            # Changed lines
             elif line.startswith("+") or line.startswith("-"):
-                # Přidej všech buffer lines jako kontext
+                # Add all buffer lines as context
                 result.extend(context_buffer)
                 context_buffer = []
                 result.append(line)
-            # Konec hunka nebo souboru
+            # End of hunk or file
             elif line.startswith("\\"):
                 pass
     
@@ -158,11 +158,11 @@ def extract_diff_with_context(patch_text: str, context_lines: int = 10) -> str:
 
 def reduce_diff_batch(files_diffs: dict[str, str]) -> str:
     """
-    Redukuje batch diffu:
-    - Soubory se změnami: full diff + context
-    - Soubory bez změn: jen 'File unchanged' marker
+    Reduces batch diff:
+    - Files with changes: full diff + context
+    - Files without changes: only 'File unchanged' marker
     
-    Vrací:
+    Returns:
     ```
     FILE: path/to/file.tf CHANGED
     @@ ... diff...
@@ -196,20 +196,20 @@ def reduce_diff_batch(files_diffs: dict[str, str]) -> str:
 def extract_smart_diff(git_diff_output: str, code_dir: str = "/code", context: int = 10) -> tuple[list[str], str]:
     """
     SMART DIFF ANALYZER:
-    Parsuje `git diff` output a vrací jen relevantní soubory + kontext.
+    Parses `git diff` output and returns only relevant files + context.
     
     Input: Git diff output (unified format)
     Output: (modified_files_list, smart_diff_text_with_context)
     
-    Redukuje o ~78-85% vs full batch load (empiricky).
+    Reduces by ~78-85% vs full batch load (empirically).
     
-    Příklad:
+    Example:
     >>> files, diff_text = extract_smart_diff(git_output)
     >>> print(files)  # ['main_infrastructure/modules/aks/main.tf', 'bootstrap/main.tf']
-    >>> print(len(diff_text))  # 5432 (vs 25000+ pro full batch)
+    >>> print(len(diff_text))  # 5432 (vs 25000+ for full batch)
     """
     if not git_diff_output or not git_diff_output.strip():
-        logger.warning("⚠️  Git diff je prázdný")
+        logger.warning("WARNING: Git diff is empty")
         return [], ""
     
     # Parse git diff - extrahuj soubory
@@ -221,13 +221,13 @@ def extract_smart_diff(git_diff_output: str, code_dir: str = "/code", context: i
     current_diff = []
     
     for line in lines:
-        # Detekce nového souboru: diff --git a/path/to/file.tf b/path/to/file.tf
+        # Detection of new file: diff --git a/path/to/file.tf b/path/to/file.tf
         if line.startswith("diff --git"):
-            # Ulož předchozí diff
+            # Save previous diff
             if current_file:
                 files_diffs[current_file] = "\n".join(current_diff)
             
-            # Parse nový soubor
+            # Parse new file
             parts = line.split()
             if len(parts) >= 4:
                 # Format: diff --git a/path b/path
@@ -237,19 +237,19 @@ def extract_smart_diff(git_diff_output: str, code_dir: str = "/code", context: i
         elif current_file:
             current_diff.append(line)
     
-    # Ulož poslední soubor
+    # Save last file
     if current_file:
         files_diffs[current_file] = "\n".join(current_diff)
     
     if not modified_files:
-        logger.warning("⚠️  Žádné .tf soubory v git diff")
+        logger.warning("WARNING: No .tf files in git diff")
         return [], ""
     
-    logger.info(f"[SMART DIFF] Nalezeny změny v {len(modified_files)} souborech:")
+    logger.info(f"[SMART DIFF] Found changes in {len(modified_files)} files:")
     for f in modified_files:
         logger.info(f"  📝 {f}")
     
-    # Redukuj diffu se kontextem
+    # Reduce diff with context
     smart_diff_text = reduce_diff_batch(files_diffs)
     
     return modified_files, smart_diff_text
@@ -257,42 +257,42 @@ def extract_smart_diff(git_diff_output: str, code_dir: str = "/code", context: i
 
 async def analyze_with_gemini(gemini_api_key: str, diff_text: str = "", modified_files: list[str] = None, code_dir: str = "/code", terraform_files_content: str = "") -> str:
     """
-    Analyzuje diff nebo CELÉ Terraform soubory pomocí JEDINÉHO Gemini API call.
-    terraform_files_content je již strukturovaný string s oddělovači (ne dict).
+    Analyzes diff or COMPLETE Terraform files using a SINGLE Gemini API call.
+    terraform_files_content is already structured string with delimiters (not dict).
     
-    S Smart Diff Analysis:
-    - Webhook mód: Extrahuje jen změněné řádky + 10 řádků kontextu
-    - Redukuje soubory bez změn na metadata
+    With Smart Diff Analysis:
+    - Webhook mode: Extracts only changed lines + 10 lines of context
+    - Reduces files without changes to metadata
     - Estimates token usage
     """
     if modified_files is None:
         modified_files = []
     
     if not diff_text and not modified_files and not terraform_files_content:
-        return "Nebyly nalezeny žádné změny."
+        return "No changes found."
     
-    # Pouze dokumentace
+    # Only documentation
     if not diff_text and modified_files:
         if all(f.endswith(".md") for f in modified_files):
-            return "Dokumentace byla aktualizována."
+            return "Documentation has been updated."
     
     genai.configure(api_key=gemini_api_key)
     
     if diff_text:
-        # Webhook mód - Smart Diff Analysis
+        # Webhook mode - Smart Diff Analysis
         logger.info("[SMART DIFF] Extracting changed lines with context...")
         
-        # Redukuj diff - extrahuj jen změny + 10 řádků kontextu
+        # Reduce diff - extract only changes + 10 lines of context
         smart_diff = extract_diff_with_context(diff_text, context_lines=10)
         
-        # Odhad tokenů
+        # Token estimation
         estimated_tokens_before = estimate_tokens(diff_text)
         estimated_tokens_after = estimate_tokens(smart_diff)
         savings_pct = ((estimated_tokens_before - estimated_tokens_after) / estimated_tokens_before * 100) if estimated_tokens_before > 0 else 0
         
         logger.info(f"[TOKEN ESTIMATE] Before: ~{estimated_tokens_before} tokens → After: ~{estimated_tokens_after} tokens ({savings_pct:.1f}% saved)")
         
-        file_list_str = ", ".join(modified_files) if modified_files else "neuvedeny"
+        file_list_str = ", ".join(modified_files) if modified_files else "not specified"
         prompt = f"""Analyze these infrastructure changes:
 
 Changed files: {file_list_str}
@@ -309,7 +309,7 @@ Focus on:
 
 Provide assessment using the MANDATORY structure from the system prompt."""
     else:
-        # CLI mód - KOMPLETNÍ SINGLE CALL analýza všech souborů najednou
+        # CLI mode - COMPLETE SINGLE CALL analysis of all files at once
         readme_content = load_readme(code_dir)
         
         readme_section = ""
@@ -319,7 +319,7 @@ Provide assessment using the MANDATORY structure from the system prompt."""
 === EXISTING PROJECT DOCUMENTATION (README.md) ===
 {readme_content[:2000]}"""
         
-        # Odhad tokenů
+        # Token estimation
         estimated_tokens = estimate_tokens(terraform_files_content + readme_section)
         logger.info(f"[TOKEN ESTIMATE - CLI] Estimated tokens for analysis: ~{estimated_tokens}")
         
@@ -329,7 +329,7 @@ You MUST respond with exactly this structure. Do not deviate. Do not skip sectio
 
 ==== PART 1: SECURITY ISSUES ====
 🚨 SECURITY
-[Your analysis of security problems or: "Bez kritických bezpečnostních problémů"]
+[Your analysis of security problems or: "No critical security problems"]
 
 ==== PART 2: COST ESTIMATES ====
 💰 COSTS
@@ -339,7 +339,7 @@ You MUST respond with exactly this structure. Do not deviate. Do not skip sectio
 
 ==== PART 3: DOCUMENTATION GAPS ====
 📝 DOCUMENTATION
-[Analysis of documentation issues compared to README or: "Dokumentace je aktuální"]
+[Analysis of documentation issues compared to README or: "Documentation is up to date"]
 
 ---
 
@@ -413,4 +413,4 @@ TOTAL ESTIMATED MONTHLY COST: ~335 USD/month
         
         # For non-quota errors, show the full traceback
         traceback.print_exc()
-        return f"Chyba: {error_msg}"
+        return f"Error: {error_msg}"

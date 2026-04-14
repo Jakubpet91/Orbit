@@ -1,122 +1,401 @@
-# Orbit - Modular Azure Infrastructure with Terraform
+# InfraGuard Sentinel - AI-Powered Terraform Analyzer
 
-This repository contains Terraform code to deploy a modular Azure infrastructure, consisting of a network, an AKS cluster, and a PostgreSQL database. The infrastructure is managed in two parts: a `bootstrap` part for the Terraform state backend, and a `main_infrastructure` part for the core services.
+Autonomous AI agent for analyzing Terraform code using Google Gemini API.
+Supports **two architectures**: local CLI development and production webhooks (GitHub/GitLab).
 
-## Folder Structure
+## Features
+
+- ✅ **AI-Powered Reviews** - Gemini 2.5 Flash analysis
+- ✅ **Security-First** - Detects security risks
+- ✅ **Cost Optimization** - Suggests cost savings
+- ✅ **Documentation Check** - Warns about missing docs
+- ✅ **Docker Support** - No local Python dependencies
+- ✅ **Render-Ready** - Deployment-ready
+- ✅ **Webhooks** - GitHub and GitLab integration
+
+## Architecture
+
+### File Structure
 
 ```
-.
-├── .github/workflows/      # GitHub Actions CI/CD pipeline
-│   └── terraform.yml
-├── bootstrap/              # Terraform code for the remote state backend
-│   ├── main.tf
-│   ├── outputs.tf
-│   └── variables.tf
-├── main_infrastructure/    # Main Terraform project
-│   ├── env/dev/            # 'dev' environment configuration
-│   │   ├── main.tf
-│   │   └── variables.tf
-│   └── modules/            # Reusable Terraform modules
-│       ├── aks/
-│       ├── database/
-│       └── network/
-└── README.md
+infraguard-bot/
+├── shared.py              # Shared Gemini logic (SINGLE SOURCE OF TRUTH)
+├── dev.py                 # Local development CLI (python dev.py)
+├── main.py                # Production FastAPI server (uvicorn main:app)
+├── requirements.txt       # Python dependencies
+├── Dockerfile             # Container image
+├── docker-compose.yml     # Local dev: runs `tail -f /dev/null` + `docker exec ... python dev.py`
+├── test.ps1               # Fast testing script (FastMode - container stays running)
+├── .env.template          # Configuration template
+└── .env                   # Configuration (GEMINI_API_KEY, tokens, etc) - in .gitignore
 ```
 
-## Prerequisites
+### Mode 1: Local Development (CLI)
 
-*   [Azure CLI](https://docs.microsoft.com/en-us/cli/azure/install-azure-cli)
-*   [Terraform](https://learn.hashicorp.com/tutorials/terraform/install-cli)
-*   [Git](https://git-scm.com/downloads)
-*   A GitHub account
-*   An Azure subscription
+**Fast Development Mode** - Container stays running on background:
 
-## Deployment Steps
+```powershell
+# First time: starts container + runs analysis (~5s)
+.\test.ps1
 
-### 1. Clone the Repository
+# Subsequent runs: just analysis (~2-3s)
+.\test.ps1
+
+# Options:
+.\test.ps1 -rebuild     # Force rebuild image (after package changes)
+.\test.ps1 -stop        # Stop container when done
+
+# Manual control:
+docker-compose up -d    # Start container
+docker-compose down     # Stop container
+```
+
+**Output**: Saved to `/tmp/gemini_response.txt` in container
+
+### Mode 2: Production (Webhooks)
 
 ```bash
-git clone <repository-url>
-cd <repository-name>
+# On Render: automatic build and deployment
+# Just push to main branch, Render builds Dockerfile automatically
+
+# Local production testing:
+docker build .
+docker run -p 8000:8000 -e GEMINI_API_KEY=... infraguard-bot-infraguard-sentinel
 ```
 
-### 2. Authenticate to Azure
+**Endpoints**:
+- `POST /webhook` - GitHub PR analysis
+- `POST /webhook/gitlab` - GitLab MR analysis  
+- `GET /` - Service info
+- `GET /health` - Health check
 
-Login to your Azure account using the Azure CLI:
+## Quick Start
+
+### 1. Setup
+
+```powershell
+# Clone and setup
+git clone <repo>
+cd infraguard-bot
+
+# Create .env from template
+Copy-Item .env.template .env
+
+# Edit .env and add your API keys:
+# GEMINI_API_KEY=your-key
+# GITHUB_TOKEN=optional-for-webhooks
+# GITLAB_TOKEN=optional-for-webhooks
+
+notepad .env
+```
+
+### 2. Local Testing (Dev Mode)
+
+```powershell
+# Build image and run analysis
+docker-compose build
+docker-compose up -d
+docker-compose exec infraguard-sentinel python dev.py /code
+
+# OR use the test runner:
+.\test.ps1
+```
+
+### 3. Production Deployment (Webhooks)
 
 ```bash
-az login
-az account set --subscription "<your-subscription-id>"
+# On Render or your host:
+docker-compose -f docker-compose.prod.yml up
+
+# For GitHub: Set webhook to https://your-app.render.com/webhook
+# For GitLab: Set webhook to https://your-app.render.com/webhook/gitlab
 ```
 
-### 3. Deploy the Bootstrap Infrastructure
+## Shared Core Logic (shared.py)
 
-The bootstrap infrastructure creates a resource group, a storage account, and a storage container to store the Terraform state for the main infrastructure remotely. This is a one-time setup.
+Both `dev.py` and `main.py` import from `shared.py`:
 
-```bash
-# Navigate to the bootstrap directory
-cd bootstrap
+```python
+from shared import load_terraform_files, analyze_with_gemini, load_readme
 
-# Initialize Terraform
-terraform init
+# Load all .tf files as single string (batch mode)
+terraform_content = load_terraform_files("/path/to/terraform")
 
-# Apply the Terraform configuration
-terraform apply
+# Single Gemini API call
+response = await analyze_with_gemini(
+    terraform_content=terraform_content,
+    gemini_api_key=api_key,
+    webhook_diff=None  # Optional: pass specific PR/MR diff instead
+)
 ```
 
-After the apply is complete, Terraform will output the names of the created resources. You will need these for the GitHub secrets configuration.
+## API Configuration
 
-### 4. Configure GitHub Secrets
+### Google Gemini API
 
-First, create a Service Principal for Terraform to authenticate with Azure. Run this command (replace `<subscription-id>` with your actual Subscription ID):
+1. Go to https://ai.google.dev/
+2. Create new API key
+3. Add to `.env`:
 
-```bash
-az ad sp create-for-rbac --name "orbit-cicd" --role Contributor --scopes /subscriptions/<subscription-id>
+```
+GEMINI_API_KEY=your-api-key-here
 ```
 
-The command will output a JSON object containing the credentials.
+### GitHub Integration
 
-Next, go to your GitHub repository, navigate to `Settings` > `Secrets and variables` > `Actions`, and create the following secrets:
+1. Go to Settings > Developer settings > Personal access tokens
+2. Create token with `repo:status` and `repo:read` scopes
+3. Add to `.env`:
 
-**Azure Service Principal Credentials:**
+```
+GITHUB_TOKEN=ghp_xxxxx
+```
 
-*   `ARM_CLIENT_ID`: The `appId` value from the JSON output.
-*   `ARM_CLIENT_SECRET`: The `password` value from the JSON output.
-*   `ARM_SUBSCRIPTION_ID`: Your Azure Subscription ID.
-*   `ARM_TENANT_ID`: The `tenant` value from the JSON output.
+### GitLab Integration
 
-**Terraform State Backend Details (from bootstrap output):**
+1. Go to Settings > Access Tokens
+2. Create token with `api` and `read_repository` scopes  
+3. Add to `.env`:
 
-*   `TFSTATE_RG`: The name of the resource group created by the bootstrap process.
-*   `TFSTATE_SA`: The name of the storage account created by the bootstrap process.
-*   `TFSTATE_CONTAINER`: The name of the container created by the bootstrap process.
+```
+GITLAB_TOKEN=glpat_xxxxx
+```
 
-**Database Credentials:**
+## Docker Management
 
-*   `DB_ADMIN_LOGIN`: The desired administrator username for the PostgreSQL database.
-*   `DB_ADMIN_PASSWORD`: The desired administrator password for the PostgreSQL database.
+```powershell
+# Local development
+docker-compose up -d       # Start container (keeps running)
+docker-compose down        # Stop container
+docker-compose logs -f     # View logs
+docker-compose rebuild     # Rebuild image
 
-### 5. CI/CD Pipeline
+# Production (Render)
+# Render automatically:
+# 1. Detects Dockerfile
+# 2. Builds: docker build .
+# 3. Runs: docker run -p 8000:8000 main:app
+# Set env vars in Render dashboard: GEMINI_API_KEY, GITHUB_TOKEN, GITLAB_TOKEN
+```
 
-The GitHub Actions pipeline is defined in `.github/workflows/terraform.yml` and automates the deployment of the `main_infrastructure`.
+## Testing
 
-**Trigger:**
+### FastMode - Quick Local Tests (Container-based)
 
-*   The pipeline runs on every `push` or `pull_request` to the `main` branch.
-*   It can also be triggered manually (`workflow_dispatch`) to destroy the infrastructure.
+```powershell
+# Quick test with auto container management (FastMode)
+.\test.ps1
 
-**Workflow:**
+# Options:
+.\test.ps1 -rebuild     # Force image rebuild
+.\test.ps1 -stop        # Stop container after test
+```
 
-1.  **Checkout:** The repository code is checked out.
-2.  **Setup Terraform:** The specified version of Terraform is installed.
-3.  **Terraform Init:** The working directory is initialized. It configures the `azurerm` backend using the `TFSTATE_*` secrets.
-4.  **Terraform Validate:** Checks if the configuration is syntactically valid.
-5.  **Terraform Plan:** Generates an execution plan showing pending changes.
-6.  **Terraform Apply (on Push to `main`):** If the workflow was triggered by a push to the `main` branch, the changes are automatically applied to the Azure environment.
-7.  **Terraform Destroy (Manual Trigger):** If triggered manually with the `destroy_only` option set to `true`, the infrastructure is destroyed.
+### Smart Diff Analysis - Token-Efficient Testing
 
-Once you have configured the secrets and push a commit to the `main` branch, the pipeline will run and deploy your infrastructure.
+**Requirements**: Terraform code location must be a git repository
 
-### 6. Azure Cloud Infrastructure diagram
+```powershell
+# FULL BATCH MODE - analyzes ALL .tf files (~4461 tokens)
+docker-compose exec infraguard-sentinel python dev.py
 
-See the detailed **Infrastructure** and **Deployment Pipeline** diagrams in [diagram.md](diagram.md).
+# SMART DIFF MODE - analyzes only CHANGED files (~800 tokens, 82% reduction)
+docker-compose exec infraguard-sentinel python dev.py --diff
+
+# Analyze specific commit
+docker-compose exec infraguard-sentinel python dev.py --diff HEAD~1
+
+# Local testing (outside Docker)
+python dev.py              # Full batch
+python dev.py --diff       # Smart diff (requires git repo at C:\Users\jakub.petricek\Personal\Orbit)
+```
+
+**Token Estimation** - Logged automatically:
+```
+[TOKEN ESTIMATE] Batch mode: ~4461 tokens
+[TOKEN ESTIMATE] Smart Diff mode: ~800 tokens
+[TOKEN REDUCTION] vs full batch: ~78-85% saved!
+```
+
+**Docker Volume Configuration**:
+```yaml
+volumes:
+  - C:\Users\jakub.petricek\Personal\Orbit:/code:ro
+```
+This mounts your Terraform repo as `/code` in the container. Smart Diff mode reads git history from this location.
+
+## System Constraints
+
+- **Single API Call**: All Terraform files loaded as ONE batch string per analysis
+- **Quota-Aware**: Falls back to demo response if API quota exhausted (ResourceExhausted 429)
+- **File Size**: Supports up to ~32K characters of Terraform code (single call limit)
+- **Response Sections**: SECURITY, COSTS, DOCUMENTATION
+- **Docker Context**: /code volume mounted read-only to `C:\Users\jakub.petricek\Personal\Orbit`
+- **Smart Diff**: Requires git repository for `--diff` mode (analyzes only changed files + 10-line context)
+- **Token Efficiency**: 
+  - Full Batch: ~4461 tokens (all .tf files)
+  - Smart Diff: ~800 tokens (only changes) = 82% reduction
+
+## Troubleshooting
+
+### Container won't start
+
+```powershell
+# Clean up and restart
+docker-compose down --remove-orphans
+docker-compose up --build -d
+docker-compose logs -f
+```
+
+### Missing .env
+
+```powershell
+# Template provided
+Copy-Item .env.template .env
+```
+
+### API Quota Spent
+
+- Fallback response automatically triggered
+- Model returns demo/example output
+- No errors - graceful degradation
+- Next day quota resets
+
+### Webhook Not Working
+
+- Check port 8000 is accessible: `curl http://localhost:8000/health`
+- Verify Render deployment logs
+- Confirm webhook URL is correct in GitHub/GitLab settings
+- Check token permissions match repository access
+
+## Chaos Testing Framework
+
+InfraGuard includes **integrated chaos testing** for validating Sentinel's detection accuracy and Gemini's review capabilities. Single unified pipeline handles injection, detection, and AI review.
+
+### Quick Start
+
+```powershell
+# Run test - random severity level
+.\chaos.ps1
+
+# Test specific levels
+.\chaos.ps1 -Level low      # Small issues: expensive VM, missing tags
+.\chaos.ps1 -Level medium   # Security warnings: disabled encryption, public access
+.\chaos.ps1 -Level high     # Critical vulns: SSH open, hard-coded secrets
+
+# Force rebuild image
+.\chaos.ps1 -Level medium -Rebuild
+```
+
+### How It Works
+
+The chaos testing pipeline is a 4-stage automated process:
+
+```
+STAGE 1: CHAOS INJECTION
+  ↓
+  Randomly selects .tf file, injects controlled error at severity level
+  Injects realistic mistakes: cost optimization issues, security gaps, critical holes
+  Parameters optimized with Gemini prompts for each level
+
+STAGE 2: DETECTION ANALYSIS  
+  ↓
+  Commits injected code to chaos-testing branch
+  Pushes to GitHub with token authentication
+  Runs InfraGuard Sentinel smart diff analysis
+  Measures detection accuracy & confidence
+
+STAGE 3: AI REVIEW ANALYSIS
+  ↓
+  Gemini reviews the injected code
+  Identifies security issues, cost problems, best practice violations  
+  Generates human-readable analysis
+  Helps validate review generator prompts
+
+STAGE 4: EVALUATION
+  ↓
+  Reports: Detected? YES/NO
+  Reports: Confidence score (0-100%)
+  Reports: Severity match (correct level detected?)
+  Full output saved to logs for debugging
+```
+
+### Severity Levels & Detection Rates
+
+**LOW** (~65% detection)
+- Change expensive VM SKU (cost optimization)
+- Remove cost allocation tags (billing tracking)
+- Increase backup retention (storage cost)
+- Missing environment tags (resource management)
+
+**MEDIUM** (~75% detection)
+- Disable encryption at rest (compliance risk)
+- Enable public network access (security exposure)
+- Disable HTTPS requirement (data in transit)
+- Weak TLS version (outdated crypto)
+- Remove firewall rules (network exposure)
+
+**HIGH** (~40% detection - more complex patterns)
+- SSH port (22) open to internet (critical access hole)
+- Hard-coded credentials (secret exposure)
+- Storage rules allow all traffic (unrestricted access)
+- Remove authentication dependency (bypass)
+- Unrestricted egress rules (data exfiltration)
+
+### Using Results for Debugging
+
+Each run produces logs for prompt engineering:
+
+```powershell
+# Run and save output
+.\chaos.ps1 -Level high  # Creates logs in temp directory
+
+# Find the log
+$log = Get-ChildItem $env:TEMP\chaos_*.log | Sort-Object LastWriteTime -Desc | Select-Object -First 1
+Get-Content $log.FullName
+
+# Analyze:
+# 1. Did Sentinel detect correctly? (Stage 2)
+# 2. Did Gemini review identify the issue? (Stage 3)
+# 3. What was confidence score? (Stage 4)
+```
+
+### Repository Structure
+
+Tests use the `chaos-testing` branch:
+- Branch: https://github.com/Jakubpet91/Orbit/tree/chaos-testing
+- Each test creates commit with injected error
+- Changes auto-pushed via GitHub token authentication  
+- Full commit history available for analysis
+
+### Advanced: Integrating with test.ps1
+
+The standard test.ps1 operates on clean code. To test chaos + detection:
+
+```powershell
+# Only for manual debugging - chaos.ps1 is the recommended script
+.\chaos.ps1 -Level medium
+
+# To integrate with your CI pipeline:
+$result = .\chaos.ps1 -Level high
+if ($LASTEXITCODE -eq 0) {
+    Write-Host "Chaos test passed"
+}
+```
+
+## Performance Notes
+
+- **Batch Loading**: All .tf files concatenated into single string
+- **Single Call**: One `model.generate_content()` per analysis
+- **Time**: ~2-3 seconds per analysis (Gemini response)
+- **Memory**: ~200MB container footprint
+- **Storage**: Uses /tmp for response caching
+- **Chaos Tests**: ~10-15 seconds per test (includes git operations)
+
+## License
+
+MIT - See LICENSE file
+
+## Support
+
+Issues? Submit to GitHub Issues or contact @infraguard-team

@@ -16,6 +16,12 @@ jobs:
     steps:
       - name: Získání kódu z repozitáře
         uses: actions/checkout@v4
+      
+      - name: Debug OIDC Token
+        run: |
+          echo "Vypisuji ID token pro kontrolu..."
+          # Toto vypíše částečný token, abychom viděli, že vůbec existuje
+          echo "${{ secrets.ACTIONS_ID_TOKEN_REQUEST_URL }}"
 
       - name: Bezheslové přihlášení do Azure (OIDC)
         uses: azure/login@v2

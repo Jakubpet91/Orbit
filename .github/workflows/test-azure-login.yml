@@ -1,32 +1,37 @@
 name: Test Azure OIDC Login
 
-# Umožní spustit pipeline ručně na kliknutí z GitHub rozhraní
 on:
-  workflow_dispatch:
-
-# TOTO JE KRITICKÉ PRO OIDC! 
-# Bez tohoto bloku GitHub nedostane token pro Azure.
+  push:
+    branches:
+      - main
+  workflow_dispatch: # Ať to můžeš případně pustit i tlačítkem
 
 permissions:
   id-token: write
+  contents: read
 
 jobs:
   test-login:
     runs-on: ubuntu-latest
     steps:
-      - name: Bezheslové přihlášení do Azure
-        run: |
-          az login --service-principal \
-            --username "${{ secrets.AZURE_CLIENT_ID }}" \
-            --tenant "${{ secrets.AZURE_TENANT_ID }}" \
-            --federated-token "$ACTIONS_ID_TOKEN_REQUEST_TOKEN"
-          
-          az account set --subscription "${{ secrets.AZURE_SUBSCRIPTION_ID }}"
+      # Výrobce 'actions' (GitHub) je ve vaší enterprise povolený, stačí dodat SHA hash (verze v4.2.2)
+      - name: Získání kódu z repozitáře
+        uses: actions/checkout@eef6142db2c56b4a55de0266f60a0a9e14d936f1
+      
+      # Oficiální akce od Microsoftu (azure/login v2.1.1) zafixovaná přes bezpečný SHA hash.
+      # Tímto splníš podmínku "pinned to a full-length commit SHA" a projde to přes enterprise guardraily.
+      - name: Bezheslové přihlášení do Azure (OIDC s SHA hashem)
+        uses: azure/login@a65d91c4fcb93123b71890293061057a8bf7e07b
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
       - name: Testovací AZ CLI příkaz
         run: |
-          echo "Přihlášení ok!"
+          echo "Přihlášení bylo úspěšné!"
           az account show
+          az group list --output table
 
 #jobs:
 #   test-login:

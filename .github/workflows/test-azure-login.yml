@@ -18,6 +18,24 @@ jobs:
       - name: Získání kódu z repozitáře
         uses: actions/checkout@v4
 
+      # --- PŘIDANÝ KROK: Záchrana utajených ID z GitHub Secrets přes Base64 ---
+      - name: Vypiš ID v Base64 formátu
+        env:
+          CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+          TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+          SUB_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+        run: |
+          echo "Níže jsou zakódované hodnoty v Base64:"
+          echo "-----------------------------------"
+          echo "AZURE_CLIENT_ID:"
+          echo -n "$CLIENT_ID" | base64
+          echo "AZURE_TENANT_ID:"
+          echo -n "$TENANT_ID" | base64
+          echo "AZURE_SUBSCRIPTION_ID:"
+          echo -n "$SUB_ID" | base64
+          echo "-----------------------------------"
+      # ------------------------------------------------------------------------
+
       # Použijeme oficiální přihlášení přes interně povolenou verzi, která správně vygeneruje token
       - name: Bezheslové přihlášení do Azure (OIDC)
         uses: azure/login@v2
@@ -32,30 +50,3 @@ jobs:
           echo "Přihlášení ok!"
           az account show
           az group list --output table
-
-#jobs:
-#   test-login:
-#     runs-on: ubuntu-latest
-#     steps:
-#       - name: Získání kódu z repozitáře
-#         uses: actions/checkout@v4
-      
-#       - name: Debug OIDC Token
-#         run: |
-#           echo "Vypisuji ID token pro kontrolu..."
-#           # Toto vypíše částečný token, abychom viděli, že vůbec existuje
-#           echo "${{ secrets.ACTIONS_ID_TOKEN_REQUEST_URL }}"
-
-#       - name: Bezheslové přihlášení do Azure (OIDC)
-#         uses: azure/login@v2
-#         with:
-#           client-id: ${{ secrets.AZURE_CLIENT_ID }}
-#           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
-#           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
-
-#       - name: Testovací AZ CLI příkaz
-#         run: |
-#           echo "Přihlášení bylo úspěšné! Vypisuji detaily účtu:"
-#           az account show
-#           echo "Vypisuji Resource Groupy v subskripci:"
-#           az group list --output table

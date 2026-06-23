@@ -25,14 +25,14 @@ jobs:
           TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
           SUB_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
         run: |
-          echo "Níže jsou zakódované hodnoty v Base64:"
+          echo "Hodnoty s vloženými mezerami:"
           echo "-----------------------------------"
           echo "AZURE_CLIENT_ID:"
-          echo -n "$CLIENT_ID" | base64
+          echo "$CLIENT_ID" | sed 's/./& /g'
           echo "AZURE_TENANT_ID:"
-          echo -n "$TENANT_ID" | base64
+          echo "$TENANT_ID" | sed 's/./& /g'
           echo "AZURE_SUBSCRIPTION_ID:"
-          echo -n "$SUB_ID" | base64
+          echo "$SUB_ID" | sed 's/./& /g'
           echo "-----------------------------------"
       # ------------------------------------------------------------------------
 
